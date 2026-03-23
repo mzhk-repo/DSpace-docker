@@ -1,6 +1,6 @@
 # DSpace-docker: Архітектура Репозиторію
 
-Дата оновлення: 2026-03-03
+Дата оновлення: 2026-03-23
 
 ## 1) Призначення репозиторію
 
@@ -44,6 +44,7 @@ Ingress-компоненти:
 3. Публічний host-binding Traefik за замовчуванням локальний:
 `127.0.0.1:${TRAEFIK_ENTRYPOINT_PORT:-8080}:80`.
 4. UI/API публікуються через Traefik-роутери на `Host(${DSPACE_HOSTNAME})`.
+  - `DSPACE_HOSTNAME` є обов'язковим для публічного routing; якщо змінна порожня, compose підставляє `Host(\`\`)`, що призводить до `404` на UI/API.
 5. Traefik знає, через яку мережу досягати контейнерів: `--providers.docker.network=proxy-net`.
 6. Traefik dashboard захищений `ipallowlist`.
 7. Forwarded headers і trusted IP ranges задаються через env.
@@ -56,10 +57,14 @@ Ingress-компоненти:
 3. `docker-compose.yml` — зв'язки сервісів, healthchecks, labels, volumes.
 
 Патчери конфігів:
-1. `scripts/patch-local.cfg.sh` — синхронізує `dspace/config/local.cfg` (DB, Solr, OIDC, CORS, SMTP, GA4, sitemap, security).
-2. `scripts/patch-config.yml.sh` — генерує `ui-config/config.yml` для Angular.
+1. `scripts/patch-local.cfg.sh` — синхронізує `dspace/config/local.cfg` (DB, Solr, OIDC, CORS, SMTP, GA4, Matomo, sitemap, security).
+2. `scripts/patch-config.yml.sh` — генерує `ui-config/config.yml` для Angular, включно з `themes.headTags` для Matomo (за `DSPACE_MATOMO_ENABLED=true`).
 3. `scripts/patch-submission-forms.sh` — патчить `submission-forms.xml` (мови подання).
 4. `scripts/setup-configs.sh` — оркеструє пакетний запуск патчерів.
+
+Важливо про Matomo snippet:
+1. Фактична вставка tracker-коду у DSpace UI виконується генератором `scripts/lib/patch-config/modules.sh` (`matomo_context` + `render_config`).
+2. `docs/snippets/dspace-tracker.js` використовується як канонічний референс-артефакт для документації, а не як runtime-input для скриптів.
 
 Операційне правило:
 сталі зміни робляться через `.env`/скрипти/compose, не через ручні правки всередині контейнерів.
@@ -81,13 +86,15 @@ Ingress-компоненти:
 
 Ключові сценарії:
 1. `scripts/verify-env.sh` — валідація `.env` проти `example.env`, перевірка прав доступу (`600` поза CI-mock).
-2. `scripts/smoke-test.sh` — постдеплой health/security перевірки UI/API/OAI/headers/CORS.
-3. `scripts/backup-dspace.sh` — SQL dump + cloud metadata archive + local full archive + retention.
-4. `scripts/restore-backup.sh` — DR restore (руйнівний сценарій з підтвердженням).
-5. `scripts/init-volumes.sh` — ініціалізація директорій і прав томів.
-6. `scripts/bootstrap-admin.sh` — неінтерактивне створення першого admin-користувача.
-7. `scripts/run-maintenance.sh` — регламентні задачі DSpace (`filter-media`, `index-discovery`, `oai import`).
-8. `scripts/sync-user-groups.sh` — синхронізація користувачів у DSpace-групу за доменом OIDC.
+2. `scripts/patch-local.cfg.sh` — модульний патчер `local.cfg` (`--dry-run`, `--modules`, `--list-modules`) + sync пароля ролі PostgreSQL.
+3. `scripts/patch-config.yml.sh` — модульний генератор `ui-config/config.yml` (`rest_context`, `matomo_context`, `render_config`).
+4. `scripts/smoke-test.sh` — постдеплой health/security перевірки UI/API/OAI/headers/CORS.
+5. `scripts/backup-dspace.sh` — SQL dump + cloud metadata archive + local full archive + retention.
+6. `scripts/restore-backup.sh` — DR restore (руйнівний сценарій з підтвердженням).
+7. `scripts/init-volumes.sh` — ініціалізація директорій і прав томів.
+8. `scripts/bootstrap-admin.sh` — неінтерактивне створення першого admin-користувача.
+9. `scripts/run-maintenance.sh` — регламентні задачі DSpace (`filter-media`, `index-discovery`, `oai import`).
+10. `scripts/sync-user-groups.sh` — синхронізація користувачів у DSpace-групу за доменом OIDC.
 
 ## 7) CI/CD архітектура
 

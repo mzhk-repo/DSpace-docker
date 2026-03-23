@@ -12,8 +12,13 @@ CI_MOCK=false
 # Якщо скрипт запускається в CI/CD середовищі без реального .env,
 # ми можемо передати прапорець --ci-mock, щоб він не падав, а просто перевіряв синтаксис
 if [[ "$1" == "--ci-mock" ]]; then
-    echo "🧪 CI Mode: Mocking .env from example.env"
-    cp "$EXAMPLE_ENV" "$ACTUAL_ENV"
+    echo "🧪 CI Mode: Would mock .env from example.env, but overwrite is disabled for safety."
+    if [ ! -f "$ACTUAL_ENV" ]; then
+        cp "$EXAMPLE_ENV" "$ACTUAL_ENV"
+        echo "✅ .env created from example.env (did not exist before)."
+    else
+        echo "⚠️  .env already exists, not overwriting."
+    fi
     CI_MOCK=true
 fi
 

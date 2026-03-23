@@ -83,6 +83,9 @@ Workflow: `.github/workflows/ci-cd.yml`
 - backup-політик
 - GA4 параметрів
 
+Критично важливо:
+- `DSPACE_HOSTNAME` має бути заданий (наприклад `repo.pinokew.buzz`), інакше Traefik-роутери отримають `Host(\`\`)`, що дає `404` на UI/API.
+
 ### Автогенерація конфігів з `.env`
 
 Скрипт `scripts/patch-local.cfg.sh` автоматично синхронізує `dspace/config/local.cfg`:
@@ -95,11 +98,34 @@ Workflow: `.github/workflows/ci-cd.yml`
 - GA4
 - auth-політики
 
+Додатково для БД:
+- при зміні `POSTGRES_PASSWORD` у `.env` скрипт також синхронізує пароль ролі PostgreSQL (контейнер `dspacedb`) без ручного SQL.
+- це запобігає розсинхрону між `local.cfg` і фактичним паролем у БД.
+
+Керування поведінкою:
+- `DB_PASSWORD_ROTATION_ENABLED=true|false` (default: `true`) — вмикає/вимикає синхронізацію пароля ролі.
+- `DB_PASSWORD_ROTATION_FAIL_ON_ERROR=true|false` (default: `true`) — зупиняти скрипт при помилці синхронізації чи продовжувати.
+- `DB_CONTAINER_NAME` (default: `dspacedb`) — ім’я контейнера PostgreSQL для ротації.
+
+Детальна процедура: `docs/DB_PASSWORD_ROTATION_RUNBOOK.md`.
+
 Додатково:
 
 - `scripts/patch-config.yml.sh` генерує `ui-config/config.yml`
 - `scripts/patch-submission-forms.sh` патчить `submission-forms.xml`
 - `scripts/setup-configs.sh` запускає патчери пакетно
+
+### Matomo в DSpace UI (як це працює зараз)
+
+- Вставка Matomo tracker у сторінки DSpace виконується через генерацію `ui-config/config.yml` скриптом `scripts/patch-config.yml.sh` (модулі `matomo_context` + `render_config`).
+- `docs/snippets/dspace-tracker.js` — канонічний референс-сніппет для документації, але не runtime-input для скриптів.
+- Для робочого трекінгу `DSPACE_MATOMO_SITE_ID` у `.env` має відповідати реальному `idsite` у Matomo (інакше tracker повертає `HTTP 400` з `An unexpected website was found in the request`).
+- Після зміни Matomo env-параметрів застосувати:
+
+```bash
+./scripts/patch-config.yml.sh
+docker compose up -d --force-recreate dspace-angular
+```
 
 ## 4. 🛠 Щоденне адміністрування (Day-2 Operations)
 
@@ -186,3 +212,34 @@ docker logs --tail=200 dspace-traefik
 - `bootstrap-admin.sh` — неінтерактивне створення першого адміністратора.
 - `run-maintenance.sh` — регламентні задачі (індексація/OAI тощо).
 
+## 8. 🧪 Troubleshooting (Швидкі перевірки)
+
+### UI повертає 404
+
+1. Перевірити `DSPACE_HOSTNAME` у `.env`.
+2. Перезапустити сервіси:
+
+```bash
+docker compose up -d dspace dspace-angular
+```
+
+3. Перевірити Traefik labels:
+
+```bash
+docker inspect dspace-angular --format '{{ index .Config.Labels "traefik.http.routers.dspace-ui.rule" }}'
+docker inspect dspace --format '{{ index .Config.Labels "traefik.http.routers.dspace-api.rule" }}'
+```
+
+Очікування: `Host(\`<your-domain>\`)` і `Host(\`<your-domain>\`) && PathPrefix(\`/server\`)`.
+
+### Matomo tracker повертає 400
+
+1. Перевірити правильність `DSPACE_MATOMO_SITE_ID` (має збігатися з `idsite` у Matomo).
+2. Перегенерувати конфіг UI:
+
+```bash
+./scripts/patch-config.yml.sh
+docker compose restart dspace-angular
+```
+
+3. Перевірити у `ui-config/config.yml`, що `setSiteId` має очікуване значення.

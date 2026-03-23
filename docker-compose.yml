@@ -99,6 +99,8 @@ services:
       dspace__P__dir: ${DSPACE_DIR:-/dspace}
       dspace__P__name: ${DSPACE_NAME:-KDV Library Repository}
       db__P__url: "jdbc:postgresql://dspacedb:${POSTGRES_INTERNAL_PORT:-5432}/${POSTGRES_DB:-dspace}"
+      db__P__username: ${POSTGRES_USER}
+      db__P__password: ${POSTGRES_PASSWORD}
       solr__P__server: "http://dspacesolr:${SOLR_INTERNAL_PORT:-8983}/solr"
       
       # === ВИКОРИСТАННЯ ЗМІННИХ (NO HARDCODE) ===
