@@ -118,7 +118,7 @@ main() {
     fi
 
     load_env_file "$ENV_FILE"
-    ensure_target_dir "$TARGET_FILE"
+    ensure_target_file "$TARGET_FILE"
 
     echo "🔧 Patching Frontend (config.yml, modular)..."
     echo "   dry-run: $DRY_RUN"

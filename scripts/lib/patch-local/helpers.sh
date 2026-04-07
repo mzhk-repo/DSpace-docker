@@ -33,13 +33,13 @@ set_config() {
     local value="$2"
     local file="$3"
 
-    if grep -Fq "$key = " "$file"; then
-        delete_config_key "$key" "$file"
-    fi
-
     if [ "${DRY_RUN:-false}" = "true" ]; then
         log_info "[dry-run] set: ${key} = ${value}"
         return 0
+    fi
+
+    if grep -Fq "$key = " "$file"; then
+        delete_config_key "$key" "$file"
     fi
 
     echo "$key = $value" >> "$file"
@@ -49,6 +49,11 @@ set_config() {
 remove_config() {
     local key="$1"
     local file="$2"
+
+    if [ "${DRY_RUN:-false}" = "true" ]; then
+        log_info "[dry-run] remove key: ${key} from ${file}"
+        return 0
+    fi
 
     if grep -Fq "$key = " "$file"; then
         delete_config_key "$key" "$file"

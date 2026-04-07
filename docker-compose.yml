@@ -214,6 +214,7 @@ services:
 networks:
   dspacenet:
     internal: true
+    name: ${INTERNAL_NETWORK}
   proxy-net:
     external: true
-    name: proxy-net
+    name: ${EXTERNAL_NETWORK}

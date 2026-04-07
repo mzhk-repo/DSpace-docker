@@ -111,6 +111,35 @@ normalize_modules() {
     printf '%s\n' "${selected[@]}"
 }
 
+ensure_target_file() {
+    local target_file="$1"
+
+    if [ -d "$target_file" ]; then
+        local backup_path="${target_file}.dir-backup.$(date +%Y%m%d%H%M%S)"
+        echo "⚠️  Found directory at $target_file. Moving it to $backup_path"
+        if [ "$DRY_RUN" = "true" ]; then
+            echo "[dry-run] would move $target_file to $backup_path"
+            echo "[dry-run] would create missing $target_file"
+            return 0
+        fi
+        mv "$target_file" "$backup_path"
+    fi
+
+    if [ ! -e "$target_file" ]; then
+        if [ "$DRY_RUN" = "true" ]; then
+            echo "[dry-run] would create missing $target_file"
+        else
+            touch "$target_file"
+        fi
+        return 0
+    fi
+
+    if [ ! -f "$target_file" ]; then
+        echo "❌ $target_file exists but is not a regular file." >&2
+        exit 1
+    fi
+}
+
 main() {
     parse_args "$@"
 
@@ -120,14 +149,7 @@ main() {
     fi
 
     load_env_file "$ENV_FILE"
-
-    if [ ! -f "$TARGET_FILE" ]; then
-        if [ "$DRY_RUN" = "true" ]; then
-            echo "[dry-run] would create missing $TARGET_FILE"
-        else
-            touch "$TARGET_FILE"
-        fi
-    fi
+    ensure_target_file "$TARGET_FILE"
 
     echo "🔧 Patching Backend Configuration (MODULAR SYNC)..."
     echo "   dry-run: $DRY_RUN"
