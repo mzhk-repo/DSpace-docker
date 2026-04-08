@@ -18,6 +18,66 @@ source "$LIB_DIR/modules.sh"
 DRY_RUN="false"
 MODULES_RAW=""
 LIST_MODULES="false"
+AUTO_RESTART="true"
+
+file_checksum() {
+    local target_file="$1"
+    if [ ! -f "$target_file" ]; then
+        printf '__missing__'
+        return 0
+    fi
+    sha256sum "$target_file" | awk '{print $1}'
+}
+
+has_module() {
+    local needle="$1"
+    shift
+    local item
+    for item in "$@"; do
+        if [ "$item" = "$needle" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+restart_backend_container() {
+    local service_name="dspace"
+    local container_name="${DSPACE_CONTAINER_NAME:-dspace}"
+    local compose_file="$SCRIPT_DIR/../docker-compose.yml"
+
+    if [ "$AUTO_RESTART" != "true" ]; then
+        echo "⏭ Container restart disabled (--no-restart)."
+        return 0
+    fi
+
+    if [ "${DRY_RUN:-false}" = "true" ]; then
+        echo "[dry-run] would restart backend container/service (${container_name}/${service_name})"
+        return 0
+    fi
+
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "⚠️ Docker not found. Skipping backend restart."
+        return 0
+    fi
+
+    if [ -f "$compose_file" ] && docker compose version >/dev/null 2>&1; then
+        if docker compose -f "$compose_file" restart "$service_name"; then
+            echo "✅ Backend restarted via docker compose: $service_name"
+            return 0
+        fi
+        echo "⚠️ docker compose restart '$service_name' failed. Trying docker restart '$container_name'..."
+    fi
+
+    if docker inspect "$container_name" >/dev/null 2>&1; then
+        docker restart "$container_name" >/dev/null
+        echo "✅ Backend restarted via docker: $container_name"
+        return 0
+    fi
+
+    echo "⚠️ Could not find backend container/service to restart ($container_name/$service_name)."
+    return 0
+}
 
 usage() {
     cat <<EOF
@@ -27,6 +87,7 @@ Options:
   --dry-run            Print planned changes without modifying files/DB
   --modules M1,M2      Run only selected modules (comma separated)
   --list-modules       Print available module names
+  --no-restart         Do not restart backend container after changes
   -h, --help           Show this help
 
 Examples:
@@ -53,6 +114,10 @@ parse_args() {
                 ;;
             --list-modules)
                 LIST_MODULES="true"
+                shift
+                ;;
+            --no-restart)
+                AUTO_RESTART="false"
                 shift
                 ;;
             -h|--help)
@@ -150,6 +215,8 @@ main() {
 
     load_env_file "$ENV_FILE"
     ensure_target_file "$TARGET_FILE"
+    local before_checksum
+    before_checksum="$(file_checksum "$TARGET_FILE")"
 
     echo "🔧 Patching Backend Configuration (MODULAR SYNC)..."
     echo "   dry-run: $DRY_RUN"
@@ -162,10 +229,27 @@ main() {
         run_patch_module "$module"
     done
 
+    local after_checksum
+    after_checksum="$(file_checksum "$TARGET_FILE")"
+    local config_changed="false"
+    if [ "$before_checksum" != "$after_checksum" ]; then
+        config_changed="true"
+    fi
+
+    local requires_restart="false"
+    if [ "$config_changed" = "true" ] || has_module "db_rotation" "${modules_to_run[@]}"; then
+        requires_restart="true"
+    fi
+
     if [ "$DRY_RUN" = "true" ]; then
         echo "✅ Dry-run finished. No files or DB credentials were changed."
     else
         echo "✅ Configuration patched successfully."
+        if [ "$requires_restart" = "true" ]; then
+            restart_backend_container
+        else
+            echo "ℹ️ No backend config changes detected. Restart not required."
+        fi
     fi
 }
 

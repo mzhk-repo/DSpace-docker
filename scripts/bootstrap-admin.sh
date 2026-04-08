@@ -9,14 +9,95 @@ info() { echo "==> $*"; }
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+AUTO_RESTART="true"
 
-# Load env (only local file, never commit it)
-if [[ -f "${ROOT_DIR}/.env" ]]; then
-  set -a
-  # shellcheck disable=SC1090,SC1091
-  source "${ROOT_DIR}/.env"
-  set +a
-fi
+usage() {
+  cat <<EOF
+Usage: ./scripts/bootstrap-admin.sh [options]
+
+Options:
+  --no-restart         Do not restart backend container after admin creation
+  -h, --help           Show this help
+EOF
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --no-restart)
+        AUTO_RESTART="false"
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        fail "Unknown option: $1"
+        ;;
+    esac
+  done
+}
+
+load_env_file() {
+  local env_file="$1"
+  [[ -f "$env_file" ]] || return 0
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    [[ -z "${line//[[:space:]]/}" ]] && continue
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
+    line="$(echo "$line" | sed -E 's/^[[:space:]]*export[[:space:]]+//')"
+    [[ "$line" == *"="* ]] || continue
+
+    local key="${line%%=*}"
+    local value="${line#*=}"
+
+    key="$(echo "$key" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+
+    value="$(echo "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    if [[ "$value" =~ ^\".*\"$ ]]; then
+      value="${value:1:${#value}-2}"
+    elif [[ "$value" =~ ^'.*'$ ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+
+    printf -v "$key" '%s' "$value"
+    export "${key?}"
+  done < "$env_file"
+}
+
+restart_backend_container() {
+  local service_name="dspace"
+  local container_name="${DSPACE_CONTAINER_NAME:-dspace}"
+  local compose_file="${ROOT_DIR}/docker-compose.yml"
+
+  if [ "$AUTO_RESTART" != "true" ]; then
+    info "Skipping backend restart (--no-restart)."
+    return 0
+  fi
+
+  if [ -f "$compose_file" ] && docker compose version >/dev/null 2>&1; then
+    if docker compose -f "$compose_file" restart "$service_name"; then
+      info "Backend restarted via docker compose: ${service_name}"
+      return 0
+    fi
+    info "docker compose restart failed, trying docker restart ${container_name}..."
+  fi
+
+  if docker inspect "$container_name" >/dev/null 2>&1; then
+    docker restart "$container_name" >/dev/null
+    info "Backend restarted via docker: ${container_name}"
+    return 0
+  fi
+
+  fail "Could not find backend container/service to restart (${container_name}/${service_name})"
+}
+
+parse_args "$@"
+load_env_file "${ROOT_DIR}/.env"
 
 : "${DSPACE_CONTAINER_NAME:=dspace}"
 : "${DSPACE_BOOTSTRAP_ADMIN_EMAIL:?Set DSPACE_BOOTSTRAP_ADMIN_EMAIL in .env}"
@@ -56,5 +137,7 @@ docker exec "${DSPACE_CONTAINER_NAME}" bash -lc \
     -l '${LNAME}' \
     -p '${PASS}' \
     -c '${LOCALE}'"
+
+restart_backend_container
 
 info "Done. Try login in"

@@ -16,6 +16,54 @@ source "$LIB_DIR/modules.sh"
 DRY_RUN="false"
 MODULES_RAW=""
 LIST_MODULES="false"
+AUTO_RESTART="true"
+
+file_checksum() {
+    local target_file="$1"
+    if [ ! -f "$target_file" ]; then
+        printf '__missing__'
+        return 0
+    fi
+    sha256sum "$target_file" | awk '{print $1}'
+}
+
+restart_frontend_container() {
+    local service_name="dspace-angular"
+    local container_name="${DSPACE_UI_CONTAINER_NAME:-dspace-angular}"
+    local compose_file="$SCRIPT_DIR/../docker-compose.yml"
+
+    if [ "$AUTO_RESTART" != "true" ]; then
+        echo "⏭ Container restart disabled (--no-restart)."
+        return 0
+    fi
+
+    if [ "${DRY_RUN:-false}" = "true" ]; then
+        echo "[dry-run] would restart frontend container/service (${container_name}/${service_name})"
+        return 0
+    fi
+
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "⚠️ Docker not found. Skipping frontend restart."
+        return 0
+    fi
+
+    if [ -f "$compose_file" ] && docker compose version >/dev/null 2>&1; then
+        if docker compose -f "$compose_file" restart "$service_name"; then
+            echo "✅ Frontend restarted via docker compose: $service_name"
+            return 0
+        fi
+        echo "⚠️ docker compose restart '$service_name' failed. Trying docker restart '$container_name'..."
+    fi
+
+    if docker inspect "$container_name" >/dev/null 2>&1; then
+        docker restart "$container_name" >/dev/null
+        echo "✅ Frontend restarted via docker: $container_name"
+        return 0
+    fi
+
+    echo "⚠️ Could not find frontend container/service to restart ($container_name/$service_name)."
+    return 0
+}
 
 usage() {
     cat <<EOF
@@ -25,6 +73,7 @@ Options:
   --dry-run            Print planned actions and preview generated YAML
   --modules M1,M2      Run only selected modules (comma separated)
   --list-modules       Print available module names
+  --no-restart         Do not restart frontend container after changes
   -h, --help           Show this help
 
 Examples:
@@ -51,6 +100,10 @@ parse_args() {
                 ;;
             --list-modules)
                 LIST_MODULES="true"
+                shift
+                ;;
+            --no-restart)
+                AUTO_RESTART="false"
                 shift
                 ;;
             -h|--help)
@@ -119,6 +172,8 @@ main() {
 
     load_env_file "$ENV_FILE"
     ensure_target_file "$TARGET_FILE"
+    local before_checksum
+    before_checksum="$(file_checksum "$TARGET_FILE")"
 
     echo "🔧 Patching Frontend (config.yml, modular)..."
     echo "   dry-run: $DRY_RUN"
@@ -131,10 +186,22 @@ main() {
         run_patch_config_module "$module"
     done
 
+    local after_checksum
+    after_checksum="$(file_checksum "$TARGET_FILE")"
+    local config_changed="false"
+    if [ "$before_checksum" != "$after_checksum" ]; then
+        config_changed="true"
+    fi
+
     if [ "$DRY_RUN" = "true" ]; then
         echo "✅ Dry-run finished. No files were changed."
     else
         echo "✅ Frontend configured."
+        if [ "$config_changed" = "true" ]; then
+            restart_frontend_container
+        else
+            echo "ℹ️ No frontend config changes detected. Restart not required."
+        fi
     fi
 }
 
