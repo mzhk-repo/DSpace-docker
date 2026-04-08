@@ -1,0 +1,58 @@
+services:
+  dspacedb:
+    container_name: !reset null
+    restart: !reset null
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+      placement:
+        constraints:
+          - node.labels.app_zone == manager
+
+  dspacesolr:
+    container_name: !reset null
+    restart: !reset null
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+      placement:
+        constraints:
+          - node.labels.app_zone == manager
+
+  dspace:
+    container_name: !reset null
+    restart: !reset null
+    depends_on: !reset null
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+      placement:
+        constraints:
+          - node.labels.app_zone == manager
+
+  dspace-angular:
+    container_name: !reset null
+    restart: !reset null
+    depends_on: !reset null
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+      placement:
+        constraints:
+          - node.labels.app_zone == manager
