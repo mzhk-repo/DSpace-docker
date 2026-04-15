@@ -99,8 +99,8 @@ services:
       dspace__P__dir: ${DSPACE_DIR:-/dspace}
       dspace__P__name: ${DSPACE_NAME:-KDV Library Repository}
       db__P__url: "jdbc:postgresql://dspacedb:${POSTGRES_INTERNAL_PORT:-5432}/${POSTGRES_DB:-dspace}"
-      db__P__username: ${POSTGRES_USER}
-      db__P__password: ${POSTGRES_PASSWORD}
+      db__P__username: ${POSTGRES_USER:-dspace}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dspace}
       solr__P__server: "http://dspacesolr:${SOLR_INTERNAL_PORT:-8983}/solr"
       
       # === ВИКОРИСТАННЯ ЗМІННИХ (NO HARDCODE) ===
@@ -128,21 +128,16 @@ services:
       - ${VOL_ASSETSTORE_PATH:-./data/assetstore}:/dspace/assetstore
       - ${VOL_EXPORTS_PATH:-./data/exports}:/dspace/exports
       - ${VOL_LOGS_PATH:-./data/logs}:/dspace/log
+      - ./scripts/entrypoint.sh:/opt/dspace/scripts/entrypoint.sh:ro
+      - ./scripts/dspace-start.sh:/opt/dspace/scripts/dspace-start.sh:ro
       - ./dspace/config/local.cfg:/dspace/config/local.cfg
       - ./dspace/config/submission-forms.xml:/dspace/config/submission-forms.xml
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
     entrypoint:
-      - /bin/bash
-      - -c
-      - |
-        set -e
-        echo "Waiting for DB..."
-        until (</dev/tcp/dspacedb/5432) >/dev/null 2>&1; do sleep 1; done
-        echo "Running DB migrations..."
-        /dspace/bin/dspace database migrate
-        echo "Starting DSpace REST..."
-        java $$JAVA_OPTS -jar /dspace/webapps/server-boot.jar --dspace.dir=/dspace
+      - /opt/dspace/scripts/entrypoint.sh
+    command:
+      - /opt/dspace/scripts/dspace-start.sh
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${DSPACE_INTERNAL_PORT:-8080}${DSPACE_REST_NAMESPACE:-/server}/api/core/sites >/dev/null 2>&1"]
       interval: 15s

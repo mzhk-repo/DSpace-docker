@@ -1,13 +1,6 @@
 # Ігнорувати файл з паролями
 .env
-integration.env
-# Ігнорувати бекапи бази даних
-*.sql
-
-# Логи
-*.log
-logs/
-**/logs/
+*.decrypted~env.*.enc
 
 # Конфіги
 dspace/config/local.cfg
@@ -16,8 +9,8 @@ ui-config/config.yml
 nginx/conf.d/dspace.conf
 
 archive/
-NEW_CHAT_START_HERE.md
-AGENTS.md
 docs/AGENTS.md
+docs/hello-world.md
 chat.json
 docs/snippets/dspace-tracker.js
+docs/DOCKER-SECRETS.md

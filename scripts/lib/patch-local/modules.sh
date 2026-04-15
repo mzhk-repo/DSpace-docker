@@ -106,7 +106,7 @@ module_cors() {
     cors_hostname="${cors_hostname:-localhost}"
 
     set_config "rest.cors.allowed-origins" "https://${cors_hostname}, http://${cors_hostname}, ${ui_localhost}" "$TARGET_FILE"
-    set_config "rest.cors.allowed-methods" "${CORS_ALLOWED_METHODS:-GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD}" "$TARGET_FILE"
+    set_config "rest.cors.allowed-methods" "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD" "$TARGET_FILE"
 }
 
 module_auth() {

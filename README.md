@@ -28,7 +28,7 @@
 
 ### Автентифікація
 
-- OIDC через Microsoft Entra ID (ключі та endpoint-и в `.env`).
+- OIDC через Microsoft Entra ID (для локального Compose ключі в `.env`, для Swarm секрети в Docker Secrets).
 - Парольна самореєстрація вимкнена патчем `local.cfg`:
   - `user.registration = false`
   - `user.forgot-password = false`
@@ -83,8 +83,39 @@ Workflow: `.github/workflows/ci-cd.yml`
 - backup-політик
 - GA4 параметрів
 
+Для Docker Swarm використовується інша модель:
+- публічні змінні: `env.dev` (див. `env.dev.example`)
+- секрети: Docker Swarm secrets (`/run/secrets/*`)
+
 Критично важливо:
 - `DSPACE_HOSTNAME` має бути заданий (наприклад `repo.pinokew.buzz`), інакше Traefik-роутери отримають `Host(\`\`)`, що дає `404` на UI/API.
+
+### Swarm: `env.dev` + Docker Secrets
+
+Підготуй `env.dev`:
+
+```bash
+cp env.dev.example env.dev
+chmod 600 env.dev
+```
+
+Створи secrets у Swarm (імена мають збігатися з `docker-compose.swarm.yml`):
+
+```bash
+printf '%s' '<postgres_password>' | docker secret create dspace_postgres_password -
+printf '%s' '<smtp_password>' | docker secret create dspace_mail_password -
+printf '%s' '<oidc_client_secret>' | docker secret create dspace_oidc_client_secret -
+printf '%s' '<ga_api_secret>' | docker secret create dspace_ga_api_secret -
+printf '%s' '<bootstrap_admin_password>' | docker secret create dspace_bootstrap_admin_password -
+```
+
+Deploy у Swarm (через rendered config):
+
+```bash
+docker compose --env-file env.dev -f docker-compose.yml -f docker-compose.swarm.yml config \
+| sed '/^name:/d' \
+| docker stack deploy -c - dspace
+```
 
 ### Автогенерація конфігів з `.env`
 

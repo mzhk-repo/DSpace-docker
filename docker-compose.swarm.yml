@@ -2,6 +2,23 @@ services:
   dspacedb:
     container_name: !reset null
     restart: !reset null
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        while IFS= read -r _l || [ -n "$$_l" ]; do
+          case "$$_l" in '' | '#'*) continue ;; *=*) export "$$_l" ;; esac
+        done < /run/secrets/app_env_payload
+        exec "$$@"
+      - --
+    command:
+      - docker-entrypoint.sh
+      - postgres
+    env_file: !reset []
+    environment: []
+    secrets:
+      - source: app_env_payload
+        target: app_env_payload
     deploy:
       replicas: 1
       restart_policy:
@@ -31,6 +48,20 @@ services:
     container_name: !reset null
     restart: !reset null
     depends_on: !reset null
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        while IFS= read -r _l || [ -n "$$_l" ]; do
+          case "$$_l" in '' | '#'*) continue ;; *=*) export "$$_l" ;; esac
+        done < /run/secrets/app_env_payload
+        exec /opt/dspace/scripts/entrypoint.sh "$$@"
+      - --
+    env_file: !reset []
+    environment: []
+    secrets:
+      - source: app_env_payload
+        target: app_env_payload
     deploy:
       replicas: 1
       restart_policy:
@@ -41,11 +72,39 @@ services:
       placement:
         constraints:
           - node.labels.app_zone == manager
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=${EXTERNAL_NETWORK}"
+        - "traefik.http.routers.dspace-api.rule=Host(`${DSPACE_HOSTNAME}`) && PathPrefix(`/server`)"
+        - "traefik.http.routers.dspace-api.entrypoints=web"
+        - "traefik.http.routers.dspace-api.priority=100"
+        - "traefik.http.routers.dspace-api.middlewares=forwarded-https@docker,security-headers@docker"
+        - "traefik.http.services.dspace-api.loadbalancer.server.port=8080"
 
   dspace-angular:
     container_name: !reset null
     restart: !reset null
     depends_on: !reset null
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        while IFS= read -r _l || [ -n "$$_l" ]; do
+          case "$$_l" in '' | '#'*) continue ;; *=*) export "$$_l" ;; esac
+        done < /run/secrets/app_env_payload
+        export DSPACE_REST_HOST="${DSPACE_HOSTNAME}"
+        export DSPACE_REST_PORT="443"
+        export DSPACE_REST_SSL="true"
+        exec pm2-runtime start dspace-ui.json --json
+    env_file: !reset []
+    environment: []
+    secrets:
+      - source: app_env_payload
+        target: app_env_payload
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'wget -qO- --header="Host: ${DSPACE_HOSTNAME}" http://127.0.0.1:${DSPACE_UI_PORT:-8081}/ >/dev/null 2>&1'
     deploy:
       replicas: 1
       restart_policy:
@@ -56,3 +115,17 @@ services:
       placement:
         constraints:
           - node.labels.app_zone == manager
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=${EXTERNAL_NETWORK}"
+        - "traefik.http.routers.dspace-ui.rule=Host(`${DSPACE_HOSTNAME}`)"
+        - "traefik.http.routers.dspace-ui.entrypoints=web"
+        - "traefik.http.routers.dspace-ui.priority=10"
+        - "traefik.http.routers.dspace-ui.middlewares=forwarded-https@docker,security-headers@docker"
+        - "traefik.http.services.dspace-ui.loadbalancer.server.port=8081"
+        - "traefik.http.services.dspace-ui.loadbalancer.passhostheader=true"
+
+secrets:
+  app_env_payload:
+    external: true
+    name: ${DSPACE_APP_ENV_PAYLOAD_SECRET_NAME:-dspace_app_env_payload_dev_v2}
