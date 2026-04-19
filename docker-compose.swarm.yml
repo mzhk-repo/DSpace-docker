@@ -7,7 +7,11 @@ services:
       - -c
       - |
         while IFS= read -r _l || [ -n "$$_l" ]; do
-          case "$$_l" in '' | '#'*) continue ;; *=*) export "$$_l" ;; esac
+          case "$$_l" in
+            '' | '#'*) continue ;;
+            POSTGRES_PASSWORD=*) continue ;;
+            *=*) export "$$_l" ;;
+          esac
         done < /run/secrets/app_env_payload
         exec "$$@"
       - --
@@ -15,10 +19,17 @@ services:
       - docker-entrypoint.sh
       - postgres
     env_file: !reset []
-    environment: []
+    environment: !override
+      TZ: ${TZ:-Europe/Kyiv}
+      PGDATA: ${POSTGRES_PGDATA:-/pgdata}
+      POSTGRES_DB: ${POSTGRES_DB:-dspace}
+      POSTGRES_USER: ${POSTGRES_USER:-dspace}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     secrets:
       - source: app_env_payload
         target: app_env_payload
+      - source: postgres_password
+        target: postgres_password
     deploy:
       replicas: 1
       restart_policy:
@@ -53,15 +64,32 @@ services:
       - -c
       - |
         while IFS= read -r _l || [ -n "$$_l" ]; do
-          case "$$_l" in '' | '#'*) continue ;; *=*) export "$$_l" ;; esac
+          case "$$_l" in
+            '' | '#'*) continue ;;
+            POSTGRES_PASSWORD=*) continue ;;
+            *=*) export "$$_l" ;;
+          esac
         done < /run/secrets/app_env_payload
         exec /opt/dspace/scripts/entrypoint.sh "$$@"
       - --
     env_file: !reset []
-    environment: []
+    environment: !override
+      TZ: ${TZ:-Europe/Kyiv}
+      JAVA_OPTS: "${DSPACE_JAVA_OPTS:--Xmx2000m -Djava.security.egd=file:/dev/./urandom}"
+      dspace__P__dir: ${DSPACE_DIR:-/dspace}
+      dspace__P__name: ${DSPACE_NAME:-KDV Library Repository}
+      db__P__url: "jdbc:postgresql://dspacedb:${POSTGRES_INTERNAL_PORT:-5432}/${POSTGRES_DB:-dspace}"
+      db__P__username: ${POSTGRES_USER:-dspace}
+      solr__P__server: "http://dspacesolr:${SOLR_INTERNAL_PORT:-8983}/solr"
+      dspace__P__server__P__url: ${DSPACE_REST_BASEURL:-http://localhost:8081/server}
+      dspace__P__ui__P__url: ${DSPACE_UI_BASEURL:-http://localhost:8081}
+      rest__P__cors__P__allowed__D__origins: ${DSPACE_UI_BASEURL:-http://localhost:8081}
+      proxies__P__trusted__P__ipranges: ${DSPACENET_SUBNET:-172.23.0.0/16}
     secrets:
       - source: app_env_payload
         target: app_env_payload
+      - source: postgres_password
+        target: POSTGRES_PASSWORD
     deploy:
       replicas: 1
       restart_policy:
@@ -128,4 +156,7 @@ services:
 secrets:
   app_env_payload:
     external: true
-    name: ${DSPACE_APP_ENV_PAYLOAD_SECRET_NAME:-dspace_app_env_payload_dev_v2}
+    name: ${DSPACE_APP_ENV_PAYLOAD_SECRET_NAME}
+  postgres_password:
+    external: true
+    name: ${DSPACE_POSTGRES_PASSWORD_SECRET_NAME}

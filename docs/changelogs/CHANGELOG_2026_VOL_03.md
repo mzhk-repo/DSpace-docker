@@ -178,3 +178,30 @@
 ### Data/impact
 - Новий runtime payload застосовано без зміни БД/Solr/assetstore даних.
 - Старі rejected/failed task лишилися в історії Swarm як артефакт попередніх невдалих стартів, але поточні task у стані `Running`.
+
+## [2026-04-16] Security hardening — `POSTGRES_PASSWORD` винесено з `docker inspect` у Swarm secret files
+
+### Контекст
+- У merged compose/swarm конфігурації `POSTGRES_PASSWORD` був присутній у `Config.Env` для `dspace_dspacedb` і `dspace_dspace`.
+- Це робило секрет видимим через `docker inspect`.
+
+### Зроблено
+- Оновлено `docker-compose.swarm.yml`:
+  - додано external secret `postgres_password` з name `${DSPACE_POSTGRES_PASSWORD_SECRET_NAME:-dspace_postgres_password_dev_v1}`;
+  - для `dspacedb` увімкнено file-based pattern: `POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password`;
+  - для `dspace` додано mount цього ж secret як `target: POSTGRES_PASSWORD` (підхоплення через `scripts/entrypoint.sh`);
+  - у wrapper entrypoint для `dspacedb` і `dspace` додано фільтр `POSTGRES_PASSWORD=*` при імпорті `app_env_payload`, щоб уникнути повернення plaintext-пароля через payload.
+- Оновлено Ansible inventory mapping:
+  - `/opt/Ansible/ansible/inventories/dev/group_vars/all/swarm_sops_payloads.yml` доповнено secret `dspace_postgres_password_dev_v1` з `dotenv_key: POSTGRES_PASSWORD`.
+- Застосовано `ansible-playbook ... --tags secrets -l dev-manager-01` і redeploy `docker stack deploy` для стеку `dspace`.
+
+### Перевірено
+- `docker secret ls` містить `dspace_postgres_password_dev_v1`.
+- `docker service inspect dspace_dspacedb` показує `POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password` і mount secret `postgres_password`.
+- `docker service inspect dspace_dspace` містить mount secret з `target: POSTGRES_PASSWORD`; у `Env` відсутній `POSTGRES_PASSWORD`.
+- `docker inspect` running контейнерів `dspace_dspacedb` і `dspace_dspace` не показує plaintext `POSTGRES_PASSWORD=`.
+- Після rollout сервіси стеку `dspace` у стані `1/1`.
+
+### Data/impact
+- Змін у даних БД/Solr/assetstore немає.
+- Зміна стосується безпечного способу доставки DB password у runtime (`file secrets` замість `Config.Env`).
