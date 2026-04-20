@@ -1,21 +1,21 @@
 #!/bin/bash
-# Скрипт для перевірки, чи всі ключі з example.env існують у .env
+# Скрипт для перевірки, чи всі ключі з .env.example існують у .env
 # Використовується в CI/CD та вручну перед запуском.
 
 set -e
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-EXAMPLE_ENV="$SCRIPT_DIR/../example.env"
+EXAMPLE_ENV="$SCRIPT_DIR/../.env.example"
 ACTUAL_ENV="$SCRIPT_DIR/../.env"
 CI_MOCK=false
 
 # Якщо скрипт запускається в CI/CD середовищі без реального .env,
 # ми можемо передати прапорець --ci-mock, щоб він не падав, а просто перевіряв синтаксис
 if [[ "$1" == "--ci-mock" ]]; then
-    echo "🧪 CI Mode: Would mock .env from example.env, but overwrite is disabled for safety."
+    echo "🧪 CI Mode: Would mock .env from .env.example, but overwrite is disabled for safety."
     if [ ! -f "$ACTUAL_ENV" ]; then
         cp "$EXAMPLE_ENV" "$ACTUAL_ENV"
-        echo "✅ .env created from example.env (did not exist before)."
+        echo "✅ .env created from .env.example (did not exist before)."
     else
         echo "⚠️  .env already exists, not overwriting."
     fi
@@ -23,12 +23,12 @@ if [[ "$1" == "--ci-mock" ]]; then
 fi
 
 if [ ! -f "$EXAMPLE_ENV" ]; then
-    echo "❌ Error: example.env not found!"
+    echo "❌ Error: .env.example not found!"
     exit 1
 fi
 
 if [ ! -f "$ACTUAL_ENV" ]; then
-    echo "❌ Error: .env not found! Please copy example.env to .env and fill it."
+    echo "❌ Error: .env not found! Please copy .env.example to .env and fill it."
     exit 1
 fi
 
@@ -40,10 +40,10 @@ if [ "$CI_MOCK" != "true" ]; then
     fi
 fi
 
-echo "🔍 Validating .env against example.env..."
+echo "🔍 Validating .env against .env.example..."
 MISSING_KEYS=0
 
-# Читаємо ключі з example.env (ігноруємо коментарі та пусті рядки)
+# Читаємо ключі з .env.example (ігноруємо коментарі та пусті рядки)
 while IFS='=' read -r key _; do
     [[ "$key" =~ ^#.*$ ]] && continue
     [[ -z "$key" ]] && continue
