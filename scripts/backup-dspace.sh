@@ -1,38 +1,30 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 # Paths
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 PROJECT_ROOT="$SCRIPT_DIR/.."
+ENVIRONMENT_ARG="${1:-}"
 
-# --- 1. Load .env (Robust Mode) ---
-ENV_FILE="$SCRIPT_DIR/../.env"
-
-if [ -f "$ENV_FILE" ]; then
-    echo "🌍 Loading environment variables..."
-    # Читаємо файл порядково, щоб уникнути проблем з пробілами без лапок
-    while IFS='=' read -r key value; do
-        # Пропускаємо коментарі та порожні рядки (хоча grep їх вже відфільтрував, перестрахуємось)
-        [[ "$key" =~ ^#.*$ ]] && continue
-        [[ -z "$key" ]] && continue
-        
-        # Видаляємо можливі пробіли на початку/кінці значення
-        # та прибираємо лапки, якщо вони є (щоб не було подвійних)
-        value=$(echo "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
-
-        # Експортуємо змінну
-        export "$key=$value"
-    done < <(grep -vE '^\s*#' "$ENV_FILE" | grep -vE '^\s*$')
-else
-    echo "❌ Error: .env file not found."
-    exit 1
+if [[ "${1:-}" == "--env" ]]; then
+    [[ $# -ge 2 ]] || { echo "ERROR: Missing value for --env" >&2; exit 1; }
+    ENVIRONMENT_ARG="$2"
+    shift 2
+elif [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "Usage: $0 [--env dev|prod]"
+    exit 0
 fi
 
+# --- 1. Load env.<env>.enc через локальну SOPS-розшифровку ---
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/autonomous-env.sh"
+load_autonomous_env "$PROJECT_ROOT" "$ENVIRONMENT_ARG"
+
 # 2. Перевірка критичних змінних
-# Якщо ці змінні не задані в .env, скрипт зупиниться
-: "${VOL_ASSETSTORE_PATH:?Variable VOL_ASSETSTORE_PATH not set in .env}"
-: "${BACKUP_RCLONE_REMOTE:?Variable BACKUP_RCLONE_REMOTE not set in .env}"
-: "${DB_SERVICE_NAME:?Variable DB_SERVICE_NAME not set in .env}"
+# Якщо ці змінні не задані в env.<env>.enc, скрипт зупиниться
+: "${VOL_ASSETSTORE_PATH:?Variable VOL_ASSETSTORE_PATH not set in env file}"
+: "${BACKUP_RCLONE_REMOTE:?Variable BACKUP_RCLONE_REMOTE not set in env file}"
+: "${DB_SERVICE_NAME:?Variable DB_SERVICE_NAME not set in env file}"
 
 # 3. Налаштування шляхів
 BACKUP_DIR="${PROJECT_ROOT}/${BACKUP_LOCAL_DIR:-backups}" 
@@ -46,6 +38,7 @@ mkdir -p "$BACKUP_DIR"
 SQL_DUMP="${BACKUP_DIR}/dspace_db_${DATE}.sql"
 ARCHIVE_CLOUD="${BACKUP_DIR}/cloud_metadata_${DATE}.tar.gz"  # Тільки база + конфіги
 ARCHIVE_LOCAL="${BACKUP_DIR}/full_local_${DATE}.tar.gz"      # Все + файли книг
+ENV_ARCHIVE_FILE="env.${AUTONOMOUS_ENVIRONMENT}.enc"
 
 # Функція для логування
 log() {
@@ -71,10 +64,10 @@ fi
 # --- КРОК 2: АРХІВ ДЛЯ ХМАРИ (Metadata Only) ---
 log "[2/5] Creating Cloud Archive (DB + Configs + Env)..."
 
-# Архівуємо SQL, папку конфігів (відносно кореня) та .env
+# Архівуємо SQL, папку конфігів та encrypted env-файл
 if tar -czf "$ARCHIVE_CLOUD" \
     -C "$BACKUP_DIR" "$(basename "$SQL_DUMP")" \
-    -C "$PROJECT_ROOT" .env \
+    -C "$PROJECT_ROOT" "$ENV_ARCHIVE_FILE" \
     -C "$PROJECT_ROOT" dspace/config; then
     log "Cloud archive created: $(basename "$ARCHIVE_CLOUD")"
 else
@@ -95,12 +88,12 @@ fi
 # --- КРОК 4: ЛОКАЛЬНИЙ ПОВНИЙ БЕКАП (З Assetstore) ---
 log "[4/5] Creating Full Local Archive (incl. Assetstore)..."
 
-# Тут ми використовуємо твою змінну VOL_ASSETSTORE_PATH з .env
+# Тут ми використовуємо змінну VOL_ASSETSTORE_PATH з env.<env>.enc
 if [ -d "$VOL_ASSETSTORE_PATH" ]; then
     # dirname/basename магія потрібна, щоб tar не зберігав повний абсолютний шлях (/home/user/...)
     tar -czf "$ARCHIVE_LOCAL" \
         -C "$BACKUP_DIR" "$(basename "$SQL_DUMP")" \
-        -C "$PROJECT_ROOT" .env \
+        -C "$PROJECT_ROOT" "$ENV_ARCHIVE_FILE" \
         -C "$PROJECT_ROOT" dspace/config \
         -C "$(dirname "$VOL_ASSETSTORE_PATH")" "$(basename "$VOL_ASSETSTORE_PATH")"
     

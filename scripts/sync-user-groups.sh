@@ -1,29 +1,33 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Скрипт для синхронізації користувачів з OIDC групи в DSpace
-# Використовує UUID групи з .env та додає користувачів, які мають email з певним доменом, до цієї групи в базі даних DSpace. 
+# Використовує UUID групи з env.<env>.enc та додає користувачів, які мають email з певним доменом, до цієї групи в базі даних DSpace. 
 # Додай рядок, щоб запускати скрипт, наприклад, кожні 10 хвилин (або щогодини):
 # crontab -e
 # */10 * * * * /home/pinokew/Dspace/DSpace-docker/scripts/sync-user-groups.sh >> /var/log/dspace-sync.log 2>&1  
 
-set -e
+set -euo pipefail
 
-# --- Load Environment ---
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-ENV_FILE="$SCRIPT_DIR/../.env"
+PROJECT_ROOT="$SCRIPT_DIR/.."
+ENVIRONMENT_ARG="${1:-}"
 
-if [ -f "$ENV_FILE" ]; then
-    while IFS='=' read -r key value; do
-        [[ "$key" =~ ^#.*$ ]] && continue
-        [[ -z "$key" ]] && continue
-        # Clean value from quotes and spaces
-        value=$(echo "$value" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
-        export "$key=$value"
-    done < <(grep -vE '^\s*#' "$ENV_FILE" | grep -vE '^\s*$')
+if [[ "${1:-}" == "--env" ]]; then
+    [[ $# -ge 2 ]] || { echo "ERROR: Missing value for --env" >&2; exit 1; }
+    ENVIRONMENT_ARG="$2"
+    shift 2
+elif [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "Usage: $0 [--env dev|prod]"
+    exit 0
 fi
 
+# --- Load env.<env>.enc через локальну SOPS-розшифровку ---
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/autonomous-env.sh"
+load_autonomous_env "$PROJECT_ROOT" "$ENVIRONMENT_ARG"
+
 # --- Configuration ---
-GROUP_UUID="${OIDC_LOGIN_GROUP_UUID}"
-DOMAIN_SUFFIX="${OIDC_DOMAIN}"
+GROUP_UUID="${OIDC_LOGIN_GROUP_UUID:-}"
+DOMAIN_SUFFIX="${OIDC_DOMAIN:-}"
 
 DB_CONTAINER="dspacedb"
 DB_USER="${POSTGRES_USER:-dspace}"
@@ -32,7 +36,7 @@ DB_PASSWORD="${POSTGRES_PASSWORD:-dspace}"
 
 # --- Validation ---
 if [ -z "$GROUP_UUID" ] || [ -z "$DOMAIN_SUFFIX" ]; then
-    echo "❌ Error: OIDC_LOGIN_GROUP_UUID or OIDC_DOMAIN is missing in .env"
+    echo "❌ Error: OIDC_LOGIN_GROUP_UUID or OIDC_DOMAIN is missing in env file"
     exit 1
 fi
 

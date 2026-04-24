@@ -4,11 +4,11 @@ load_env_file() {
     local env_file="$1"
 
     if [ ! -f "$env_file" ]; then
-        echo "❌ Error: .env file not found: $env_file"
+        echo "❌ Error: env file not found: $env_file"
         return 1
     fi
 
-    echo "🌍 Loading environment variables..."
+    echo "🌍 Loading environment variables from $env_file..."
     while IFS='=' read -r key value; do
         [[ "$key" =~ ^#.*$ ]] && continue
         [[ -z "$key" ]] && continue

@@ -14,3 +14,4 @@ docs/hello-world.md
 chat.json
 docs/snippets/dspace-tracker.js
 docs/DOCKER-SECRETS.md
+.orchestrator-state/

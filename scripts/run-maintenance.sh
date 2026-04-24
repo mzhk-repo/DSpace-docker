@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Скрипт для запуску регулярного обслуговування DSpace та безпечного вимкнення.
 # Всі логи пишуться в stdout/stderr, які Cron перенаправляє в єдиний лог-файл.
 #     crontab -e
@@ -7,31 +7,25 @@
 #     * `0 13 * * *` — 0 хвилин, 13 годин, кожен день, кожен місяць.
 #     * `>> .../cron.log` — записувати результат у файл, щоб ти міг перевірити, чи воно працювало.
 
-set -e
+set -euo pipefail
 
-# --- 1. Load .env (Robust Mode) ---
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-ENV_FILE="$SCRIPT_DIR/../.env"
+PROJECT_ROOT="$SCRIPT_DIR/.."
+ENVIRONMENT_ARG="${1:-}"
 
-if [ -f "$ENV_FILE" ]; then
-    echo "🌍 Loading environment variables..."
-    # Читаємо файл порядково, щоб уникнути проблем з пробілами без лапок
-    while IFS='=' read -r key value; do
-        # Пропускаємо коментарі та порожні рядки (хоча grep їх вже відфільтрував, перестрахуємось)
-        [[ "$key" =~ ^#.*$ ]] && continue
-        [[ -z "$key" ]] && continue
-        
-        # Видаляємо можливі пробіли на початку/кінці значення
-        # та прибираємо лапки, якщо вони є (щоб не було подвійних)
-        value=$(echo "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
-
-        # Експортуємо змінну
-        export "$key=$value"
-    done < <(grep -vE '^\s*#' "$ENV_FILE" | grep -vE '^\s*$')
-else
-    echo "❌ Error: .env file not found."
-    exit 1
+if [[ "${1:-}" == "--env" ]]; then
+    [[ $# -ge 2 ]] || { echo "ERROR: Missing value for --env" >&2; exit 1; }
+    ENVIRONMENT_ARG="$2"
+    shift 2
+elif [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "Usage: $0 [--env dev|prod]"
+    exit 0
 fi
+
+# --- 1. Load env.<env>.enc через локальну SOPS-розшифровку ---
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/autonomous-env.sh"
+load_autonomous_env "$PROJECT_ROOT" "$ENVIRONMENT_ARG"
 
 # Отримуємо назву контейнера (з .env, fallback на "dspace")
 CONTAINER_NAME="${DSPACE_CONTAINER_NAME:-dspace}"

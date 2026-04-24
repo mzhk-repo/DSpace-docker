@@ -36,40 +36,35 @@ require_cmd() {
 # ----------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-ENV_FILE="$PROJECT_ROOT/.env"
 
-# --- 1. Load .env (Robust Mode) ---
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-ENV_FILE="$SCRIPT_DIR/../.env"
-
-if [ -f "$ENV_FILE" ]; then
-    echo "🌍 Loading environment variables..."
-    # Читаємо файл порядково, щоб уникнути проблем з пробілами без лапок
-    while IFS='=' read -r key value; do
-        # Пропускаємо коментарі та порожні рядки (хоча grep їх вже відфільтрував, перестрахуємось)
-        [[ "$key" =~ ^#.*$ ]] && continue
-        [[ -z "$key" ]] && continue
-        
-        # Видаляємо можливі пробіли на початку/кінці значення
-        # та прибираємо лапки, якщо вони є (щоб не було подвійних)
-        value=$(echo "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
-
-        # Експортуємо змінну
-        export "$key=$value"
-    done < <(grep -vE '^\s*#' "$ENV_FILE" | grep -vE '^\s*$')
-else
-    echo "❌ Error: .env file not found."
-    exit 1
+ENVIRONMENT_ARG=""
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  echo "Usage: sudo $0 [--env dev|prod] <path_to_backup_file.tar.gz>"
+  echo "Example: sudo $0 --env prod /srv/backups/dspace_full_2026-02-18.tar.gz"
+  exit 0
+elif [[ "${1:-}" == "--env" ]]; then
+  [[ $# -ge 2 ]] || die "Missing value for --env"
+  ENVIRONMENT_ARG="$2"
+  shift 2
+elif [[ "${1:-}" =~ ^(dev|development|prod|production)$ ]]; then
+  ENVIRONMENT_ARG="$1"
+  shift
 fi
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: sudo $0 [--env dev|prod] <path_to_backup_file.tar.gz>"
+  echo "Example: sudo $0 --env prod /srv/backups/dspace_full_2026-02-18.tar.gz"
+  exit 1
+fi
+
+# --- 1. Load env.<env>.enc через локальну SOPS-розшифровку ---
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/autonomous-env.sh"
+load_autonomous_env "$PROJECT_ROOT" "$ENVIRONMENT_ARG"
 
 # ----------------------------
 # 3) Args & preflight checks
 # ----------------------------
-if [[ $# -lt 1 ]]; then
-  echo "Usage: sudo $0 <path_to_backup_file.tar.gz>"
-  echo "Example: sudo $0 /srv/backups/dspace_full_2026-02-18.tar.gz"
-  exit 1
-fi
 
 BACKUP_FILE_RAW="$1"
 if [[ "$BACKUP_FILE_RAW" = /* ]]; then
@@ -86,9 +81,9 @@ require_cmd docker
 require_cmd sudo
 
 # ВАЖЛИВО: нижче — критичні шляхи з SSOT
-: "${VOL_POSTGRESQL_PATH:?VOL_POSTGRESQL_PATH is required in .env}"
-: "${VOL_SOLR_PATH:?VOL_SOLR_PATH is required in .env}"
-: "${VOL_ASSETSTORE_PATH:?VOL_ASSETSTORE_PATH is required in .env}"
+: "${VOL_POSTGRESQL_PATH:?VOL_POSTGRESQL_PATH is required in env file}"
+: "${VOL_SOLR_PATH:?VOL_SOLR_PATH is required in env file}"
+: "${VOL_ASSETSTORE_PATH:?VOL_ASSETSTORE_PATH is required in env file}"
 
 # Твій compose файл
 COMPOSE_FILE="$PROJECT_ROOT/docker-compose.yml"
