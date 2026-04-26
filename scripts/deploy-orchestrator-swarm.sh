@@ -90,6 +90,59 @@ run_deploy_adjacent_scripts() {
   fi
 }
 
+runtime_env_has_key() {
+  local env_file="$1"
+  local expected_key="$2"
+  local line key
+
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="${line%$'\r'}"
+    [[ -z "${line//[[:space:]]/}" ]] && continue
+    [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+
+    line="$(printf '%s' "${line}" | sed -E 's/^[[:space:]]*export[[:space:]]+//')"
+    [[ "${line}" == *"="* ]] || continue
+
+    key="${line%%=*}"
+    key="$(printf '%s' "${key}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
+    if [[ "${key}" == "${expected_key}" ]]; then
+      return 0
+    fi
+  done < "${env_file}"
+
+  return 1
+}
+
+validate_runtime_env_file() {
+  local required_keys=(
+    VOL_POSTGRESQL_PATH
+    VOL_SOLR_PATH
+    VOL_ASSETSTORE_PATH
+    VOL_EXPORTS_PATH
+    VOL_LOGS_PATH
+  )
+  local missing=()
+  local key
+
+  if [[ ! -s "${ENV_FILE}" ]]; then
+    log "ERROR: runtime env file is missing or empty: ${ENV_FILE}"
+    exit 1
+  fi
+
+  for key in "${required_keys[@]}"; do
+    if ! runtime_env_has_key "${ENV_FILE}" "${key}"; then
+      missing+=("${key}")
+    fi
+  done
+
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    log "ERROR: runtime env file ${ENV_FILE} is missing required deploy key(s): ${missing[*]}"
+    log "HINT: check the GitHub environment selected by ENVIRONMENT_NAME=${ENVIRONMENT_NAME:-unset}, SOPS decrypt step, and DEPLOY_PROJECT_DIR/repo checkout."
+    exit 1
+  fi
+}
+
 run_post_deploy_scripts() {
   local bootstrap_admin_script
 
@@ -251,6 +304,7 @@ deploy_swarm() {
   fi
 
   prepare_deploy_state
+  validate_runtime_env_file
   run_ansible_secrets_if_configured
   run_validation_scripts
   run_deploy_adjacent_scripts

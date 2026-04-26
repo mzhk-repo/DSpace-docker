@@ -55,25 +55,62 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
+load_env_file() {
+  local env_file="$1"
+  local line key value
+
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="${line%$'\r'}"
+    [[ -z "${line//[[:space:]]/}" ]] && continue
+    [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+
+    line="$(printf '%s' "${line}" | sed -E 's/^[[:space:]]*export[[:space:]]+//')"
+    [[ "${line}" == *"="* ]] || continue
+
+    key="${line%%=*}"
+    value="${line#*=}"
+
+    key="$(printf '%s' "${key}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    [[ "${key}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+
+    value="$(printf '%s' "${value}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    if [[ "${value}" =~ ^\".*\"$ ]]; then
+      value="${value:1:${#value}-2}"
+    elif [[ "${value}" =~ ^\'.*\'$ ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+
+    printf -v "${key}" '%s' "${value}"
+    export "${key?}"
+  done < "${env_file}"
+}
+
+require_env_keys() {
+  local missing=()
+  local key
+
+  for key in "$@"; do
+    if [[ -z "${!key:-}" ]]; then
+      missing+=("${key}")
+    fi
+  done
+
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    printf '[init-volumes] ERROR: missing required variable(s) in %s: %s\n' \
+      "${ENV_FILE}" "${missing[*]}" >&2
+    exit 1
+  fi
+}
+
 echo "🌍 Loading environment variables from ${ENV_FILE}..."
-while IFS='=' read -r key value; do
-  [[ "$key" =~ ^\s*# ]] && continue
-  [[ -z "${key//[[:space:]]/}" ]] && continue
+load_env_file "${ENV_FILE}"
 
-  key=$(echo "$key" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-  value=$(echo "${value:-}" | sed \
-    -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
-    -e 's/^"//' -e 's/"$//' \
-    -e "s/^'//" -e "s/'$//")
-
-  export "$key=$value"
-done < <(grep -vE '^\s*#' "$ENV_FILE" | grep -vE '^\s*$')
-
-: "${VOL_POSTGRESQL_PATH:?VOL_POSTGRESQL_PATH is required in env file}"
-: "${VOL_SOLR_PATH:?VOL_SOLR_PATH is required in env file}"
-: "${VOL_ASSETSTORE_PATH:?VOL_ASSETSTORE_PATH is required in env file}"
-: "${VOL_EXPORTS_PATH:?VOL_EXPORTS_PATH is required in env file}"
-: "${VOL_LOGS_PATH:?VOL_LOGS_PATH is required in env file}"
+require_env_keys \
+  VOL_POSTGRESQL_PATH \
+  VOL_SOLR_PATH \
+  VOL_ASSETSTORE_PATH \
+  VOL_EXPORTS_PATH \
+  VOL_LOGS_PATH
 
 VOL_PG="$VOL_POSTGRESQL_PATH"
 VOL_SOLR="$VOL_SOLR_PATH"
