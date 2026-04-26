@@ -10,26 +10,47 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 PROJECT_ROOT="$SCRIPT_DIR/.."
 ENVIRONMENT_ARG="${1:-}"
+DRY_RUN=false
 
-if [[ "${1:-}" == "--env" ]]; then
-    [[ $# -ge 2 ]] || { echo "ERROR: Missing value for --env" >&2; exit 1; }
-    ENVIRONMENT_ARG="$2"
-    shift 2
-elif [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    echo "Usage: $0 [--env dev|prod]"
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --env)
+      shift
+      [[ $# -gt 0 ]] || { echo "ERROR: Missing value for --env" >&2; exit 1; }
+      ENVIRONMENT_ARG="$1"
+      ;;
+    --env=*)
+      ENVIRONMENT_ARG="${1#--env=}"
+      ;;
+    --dry-run)
+      DRY_RUN=true
+      ;;
+    -h|--help)
+    echo "Usage: $0 [--env dev|prod] [--dry-run]"
     exit 0
-fi
+      ;;
+    dev|development|prod|production)
+      ENVIRONMENT_ARG="$1"
+      ;;
+    *)
+      echo "ERROR: unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
 
 # --- Load env.<env>.enc через локальну SOPS-розшифровку ---
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/autonomous-env.sh"
 load_autonomous_env "$PROJECT_ROOT" "$ENVIRONMENT_ARG"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/docker-runtime.sh"
 
 # --- Configuration ---
 GROUP_UUID="${OIDC_LOGIN_GROUP_UUID:-}"
 DOMAIN_SUFFIX="${OIDC_DOMAIN:-}"
 
-DB_CONTAINER="dspacedb"
 DB_USER="${POSTGRES_USER:-dspace}"
 DB_NAME="${POSTGRES_DB:-dspace}"
 DB_PASSWORD="${POSTGRES_PASSWORD:-dspace}"
@@ -67,7 +88,13 @@ WHERE e.email LIKE '%$TARGET_DOMAIN'
 
 # --- Execution ---
 # Використовуємо Pipe метод для передачі пароля та запиту
-echo "$SQL_QUERY" | docker exec -i -e PGPASSWORD="$DB_PASSWORD" "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -w > /tmp/sync_output.txt 2>&1
+if [[ "$DRY_RUN" == true ]]; then
+    echo "[dry-run] SQL to execute:"
+    echo "$SQL_QUERY"
+    exit 0
+fi
+
+echo "$SQL_QUERY" | docker_runtime_exec dspacedb env PGPASSWORD="$DB_PASSWORD" psql -U "$DB_USER" -d "$DB_NAME" -w > /tmp/sync_output.txt 2>&1
 
 OUTPUT=$(cat /tmp/sync_output.txt)
 rm /tmp/sync_output.txt
