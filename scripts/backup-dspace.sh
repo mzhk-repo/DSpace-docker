@@ -3,8 +3,8 @@ set -euo pipefail
 
 # Paths
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-PROJECT_ROOT="$SCRIPT_DIR/.."
-ENVIRONMENT_ARG="${1:-}"
+PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." &> /dev/null && pwd -P)
+ENVIRONMENT_ARG=""
 DRY_RUN=false
 
 while [[ "$#" -gt 0 ]]; do
@@ -47,113 +47,142 @@ source "$SCRIPT_DIR/lib/docker-runtime.sh"
 : "${VOL_ASSETSTORE_PATH:?Variable VOL_ASSETSTORE_PATH not set in env file}"
 : "${BACKUP_RCLONE_REMOTE:?Variable BACKUP_RCLONE_REMOTE not set in env file}"
 : "${DB_SERVICE_NAME:?Variable DB_SERVICE_NAME not set in env file}"
+: "${BACKUP_ASSETSTORE_MIRROR:?Variable BACKUP_ASSETSTORE_MIRROR not set in env file}"
+
+resolve_absolute_path() {
+    local raw_path="$1"
+    local path="$raw_path"
+    local dir
+    local suffix
+
+    if [[ "$path" != /* ]]; then
+        path="${PROJECT_ROOT}/${path}"
+    fi
+
+    dir="$(dirname "$path")"
+    suffix="$(basename "$path")"
+    while [[ ! -d "$dir" && "$dir" != "/" ]]; do
+        suffix="$(basename "$dir")/${suffix}"
+        dir="$(dirname "$dir")"
+    done
+
+    if [[ "$dir" == "/" ]]; then
+        printf '/%s\n' "$suffix"
+    else
+        printf '%s/%s\n' "$(cd "$dir" &> /dev/null && pwd -P)" "$suffix"
+    fi
+}
+
+init_backup_dir() {
+    local dir="$1"
+    local mode="0750"
+    local owner_uid
+    local owner_gid
+
+    owner_uid="$(id -u)"
+    owner_gid="$(id -g)"
+    if [[ "$owner_uid" == "0" && -n "${SUDO_UID:-}" ]]; then
+        owner_uid="$SUDO_UID"
+        owner_gid="${SUDO_GID:-$owner_gid}"
+    fi
+
+    if [[ "$(id -u)" == "0" ]]; then
+        install -d -m "$mode" -o "$owner_uid" -g "$owner_gid" "$dir"
+        return 0
+    fi
+
+    if install -d -m "$mode" "$dir" 2> /dev/null; then
+        return 0
+    fi
+
+    if command -v sudo > /dev/null && sudo -n true 2> /dev/null; then
+        sudo -n install -d -m "$mode" -o "$owner_uid" -g "$owner_gid" "$dir"
+        return 0
+    fi
+
+    printf 'ERROR: Cannot create backup directory with required permissions: %s\n' "$dir" >&2
+    printf '       Run once with a user that can create it, or configure passwordless sudo for install -d.\n' >&2
+    exit 1
+}
 
 # 3. Налаштування шляхів
-BACKUP_DIR="${PROJECT_ROOT}/${BACKUP_LOCAL_DIR:-backups}" 
+BACKUP_LOCAL_DIR_RAW="${BACKUP_LOCAL_DIR:-backups}"
+BACKUP_DIR="$(resolve_absolute_path "$BACKUP_LOCAL_DIR_RAW")"
 DATE=$(date +%Y-%m-%d_%H-%M)
-LOG_FILE="${BACKUP_DIR}/backup_log.txt"
 
 # Створення папки бекапів
-mkdir -p "$BACKUP_DIR"
+if [[ "$DRY_RUN" != true ]]; then
+    init_backup_dir "$BACKUP_DIR"
+    BACKUP_DIR=$(cd "$BACKUP_DIR" &> /dev/null && pwd -P)
+fi
+LOG_FILE="${BACKUP_DIR}/backup_log.txt"
+export BACKUP_DIR DATE LOG_FILE DRY_RUN PROJECT_ROOT
 
 # Імена файлів
 SQL_DUMP="${BACKUP_DIR}/dspace_db_${DATE}.sql"
 ARCHIVE_CLOUD="${BACKUP_DIR}/cloud_metadata_${DATE}.tar.gz"  # Тільки база + конфіги
 ARCHIVE_LOCAL="${BACKUP_DIR}/full_local_${DATE}.tar.gz"      # Все + файли книг
 ENV_ARCHIVE_FILE="env.${AUTONOMOUS_ENVIRONMENT}.enc"
+export SQL_DUMP ARCHIVE_CLOUD ARCHIVE_LOCAL ENV_ARCHIVE_FILE
 
 # Функція для логування
 log() {
-    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
+    else
+        echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+    fi
 }
+
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/backup-metadata.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/backup-assetstore.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/backup-cleanup.sh"
+
+check_prerequisites() {
+    local missing=()
+
+    command -v rclone &> /dev/null || missing+=("rclone")
+    command -v rsync &> /dev/null || missing+=("rsync")
+    command -v sha256sum &> /dev/null || missing+=("sha256sum")
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        if [[ "$DRY_RUN" == true ]]; then
+            log "WARNING: Missing required tools for real run: ${missing[*]}"
+        else
+            log "ERROR: Missing required tools: ${missing[*]}"
+            exit 1
+        fi
+    fi
+
+    local df_target="$BACKUP_DIR"
+    while [[ ! -e "$df_target" && "$df_target" != "/" ]]; do
+        df_target="$(dirname "$df_target")"
+    done
+
+    local free_kb
+    free_kb=$(df --output=avail "$df_target" | tail -1)
+    if (( free_kb < 10485760 )); then
+        log "WARNING: Less than 10 GB free on backup filesystem (${free_kb} KB available)."
+    fi
+}
+
+partial_cleanup() {
+    log "ERROR: Backup aborted. Removing partial artifacts."
+    [[ -n "${SQL_DUMP:-}" ]] && rm -f "$SQL_DUMP"
+    [[ -n "${ARCHIVE_CLOUD:-}" ]] && rm -f "$ARCHIVE_CLOUD" "${ARCHIVE_CLOUD}.sha256"
+    [[ -n "${ARCHIVE_LOCAL:-}" ]] && rm -f "$ARCHIVE_LOCAL"
+}
+
+trap partial_cleanup ERR
 
 log "=== Starting Backup Routine ==="
 
-# --- КРОК 1: ДАМП БАЗИ ДАНИХ ---
-log "[1/5] Dumping Database from service: $DB_SERVICE_NAME..."
-
-if [[ "$DRY_RUN" == true ]]; then
-    log "[dry-run] docker_runtime_exec $DB_SERVICE_NAME pg_dump -U *** *** > $SQL_DUMP"
-elif docker_runtime_exec "$DB_SERVICE_NAME" \
-    pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > "$SQL_DUMP"; then
-    log "Database dumped successfully."
-else
-    log "ERROR: Database dump failed!"
-    rm -f "$SQL_DUMP"
-    exit 1
-fi
-
-# --- КРОК 2: АРХІВ ДЛЯ ХМАРИ (Metadata Only) ---
-log "[2/5] Creating Cloud Archive (DB + Configs + Env)..."
-
-# Архівуємо SQL, папку конфігів та encrypted env-файл
-if [[ "$DRY_RUN" == true ]]; then
-    log "[dry-run] tar cloud archive -> $ARCHIVE_CLOUD"
-elif tar -czf "$ARCHIVE_CLOUD" \
-    -C "$BACKUP_DIR" "$(basename "$SQL_DUMP")" \
-    -C "$PROJECT_ROOT" "$ENV_ARCHIVE_FILE" \
-    -C "$PROJECT_ROOT" dspace/config; then
-    log "Cloud archive created: $(basename "$ARCHIVE_CLOUD")"
-else
-    log "ERROR: Cloud archiving failed!"
-    exit 1
-fi
-
-# --- КРОК 3: ЗАВАНТАЖЕННЯ НА GOOGLE DRIVE ---
-log "[3/5] Uploading to Google Drive ($BACKUP_RCLONE_REMOTE)..."
-
-if [[ "$DRY_RUN" == true ]]; then
-    log "[dry-run] rclone copy $ARCHIVE_CLOUD ${BACKUP_RCLONE_REMOTE}:${BACKUP_RCLONE_FOLDER}"
-elif rclone copy "$ARCHIVE_CLOUD" "${BACKUP_RCLONE_REMOTE}:${BACKUP_RCLONE_FOLDER}"; then
-    log "Upload SUCCESS."
-else
-    log "ERROR: Upload FAILED. Check internet or rclone config."
-    # Не виходимо, бо треба зробити локальний повний бекап
-fi
-
-# --- КРОК 4: ЛОКАЛЬНИЙ ПОВНИЙ БЕКАП (З Assetstore) ---
-log "[4/5] Creating Full Local Archive (incl. Assetstore)..."
-
-# Тут ми використовуємо змінну VOL_ASSETSTORE_PATH з env.<env>.enc
-if [[ "$DRY_RUN" == true ]]; then
-    log "[dry-run] tar full local archive incl. assetstore -> $ARCHIVE_LOCAL"
-elif [ -d "$VOL_ASSETSTORE_PATH" ]; then
-    # dirname/basename магія потрібна, щоб tar не зберігав повний абсолютний шлях (/home/user/...)
-    tar -czf "$ARCHIVE_LOCAL" \
-        -C "$BACKUP_DIR" "$(basename "$SQL_DUMP")" \
-        -C "$PROJECT_ROOT" "$ENV_ARCHIVE_FILE" \
-        -C "$PROJECT_ROOT" dspace/config \
-        -C "$(dirname "$VOL_ASSETSTORE_PATH")" "$(basename "$VOL_ASSETSTORE_PATH")"
-    
-    log "Full Local archive created: $(basename "$ARCHIVE_LOCAL")"
-else
-    log "WARNING: Assetstore path ($VOL_ASSETSTORE_PATH) not found! Skipping assetstore backup."
-fi
-
-# --- КРОК 5: ОЧИЩЕННЯ ---
-log "[5/5] Cleanup..."
-
-# Видаляємо "сирий" SQL (він вже в архівах)
-if [[ "$DRY_RUN" == true ]]; then
-    log "[dry-run] rm -f $SQL_DUMP"
-else
-    rm -f "$SQL_DUMP"
-fi
-
-# Видаляємо "хмарний" архів з диска (щоб не дублювати місце, бо у нас є повний)
-if [[ "$DRY_RUN" == true ]]; then
-    log "[dry-run] rm -f $ARCHIVE_CLOUD"
-else
-    rm -f "$ARCHIVE_CLOUD"
-fi
-
-# Видаляємо старі локальні архіви (старше N днів з .env)
-RETENTION=${BACKUP_RETENTION_DAYS:-7}
-if [[ "$DRY_RUN" == true ]]; then
-    log "[dry-run] find $BACKUP_DIR -name full_local_*.tar.gz -mtime +$RETENTION -exec rm"
-else
-    find "$BACKUP_DIR" -name "full_local_*.tar.gz" -mtime +"$RETENTION" -exec rm {} \;
-fi
-log "Old backups (older than $RETENTION days) removed."
+check_prerequisites
+backup_metadata
+backup_assetstore
+backup_cleanup
 
 log "=== Backup Finished ==="
