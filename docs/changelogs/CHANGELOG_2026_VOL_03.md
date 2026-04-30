@@ -205,3 +205,113 @@
 ### Data/impact
 - Змін у даних БД/Solr/assetstore немає.
 - Зміна стосується безпечного способу доставки DB password у runtime (`file secrets` замість `Config.Env`).
+
+## [2026-04-24] Scripts refactor — Swarm + SOPS env flow для DSpace
+
+### Контекст
+- Репозиторій переводиться на єдиний `dev/prod` flow через `env.dev.enc` / `env.prod.enc`.
+- CI/CD передає розшифрований env через `ORCHESTRATOR_ENV_FILE`, а автономні cron/manual скрипти мають визначати середовище через `SERVER_ENV` або `--env dev|prod`.
+
+### Зроблено
+- Оновлено `scripts/deploy-orchestrator-swarm.sh`:
+  - додано фази `validation -> deploy-adjacent -> docker compose config -> docker stack deploy -> post-deploy`;
+  - підключено `verify-env.sh`, `smoke-test.sh --dry-run`, `init-volumes.sh`, `setup-configs.sh --no-restart`, `bootstrap-admin.sh --no-restart`;
+  - додано умовний restart backend через `docker service update --force ${STACK_NAME}_dspace`, якщо змінився backend config або вперше створено admin.
+- Оновлено validation/deploy-adjacent скрипти:
+  - `verify-env.sh` перевіряє `env.*.enc` проти `.env.example`;
+  - `smoke-test.sh` вміє читати env із `ORCHESTRATOR_ENV_FILE` або `env.<env>.enc`;
+  - `init-volumes.sh`, `patch-local.cfg.sh`, `patch-config.yml.sh`, `patch-submission-forms.sh` переведено на `ORCHESTRATOR_ENV_FILE` з fallback на `.env` тільки для локального dev;
+  - `setup-configs.sh` отримав `--no-restart`.
+- Оновлено runtime/post-deploy:
+  - `bootstrap-admin.sh` став Swarm-aware, ідемпотентно завершується якщо admin уже існує, і ставить flag тільки після фактичного створення admin;
+  - `dspace-start.sh` отримав bounded DB wait і зберіг ідемпотентний запуск DB migrations.
+- Оновлено автономні скрипти Категорії 2:
+  - додано `scripts/lib/autonomous-env.sh`;
+  - `backup-dspace.sh`, `restore-backup.sh`, `run-maintenance.sh`, `sync-user-groups.sh` читають `env.<env>.enc` через SOPS-розшифровку в `/dev/shm`;
+  - додано підтримку `--env dev|prod` / `SERVER_ENV`;
+  - `backup-dspace.sh` архівує encrypted env-файл (`env.<env>.enc`) замість plaintext `.env`.
+
+### Перевірено
+- `bash -n` для змінених shell-скриптів — OK.
+- `shellcheck` для змінених shell-скриптів — OK.
+- `verify-env.sh --all` перевіряє `env.dev.enc` і `env.prod.enc`.
+- `smoke-test.sh --dry-run --modules context` читає hostname з env.
+- `init-volumes.sh --dry-run`, `patch-local.cfg.sh --dry-run`, `patch-config.yml.sh --dry-run` працюють з `ORCHESTRATOR_ENV_FILE`.
+- `bootstrap-admin.sh --no-restart` на live-контейнері підтвердив: admin уже існує, нового користувача не створено.
+- `autonomous-env.sh` успішно розшифровує `env.dev.enc` і `env.prod.enc` у `/dev/shm` та завантажує dotenv без shell-виконання значень.
+
+### Data/impact
+- Реальний `docker stack deploy`, `docker service update --force`, backup/restore/maintenance destructive flows не запускались.
+- Змін у даних БД/Solr/assetstore немає.
+
+## [2026-04-24] Scripts runbook + live Swarm deploy validation
+
+### Зроблено
+- Повністю перезаписано `docs/scripts_runbook.md` під DSpace Docker:
+  - описано env-контракти `ORCHESTRATOR_ENV_FILE`, `SERVER_ENV`, `--env dev|prod`;
+  - задокументовано validation, deploy-adjacent, autonomous та runtime/out-of-scope скрипти;
+  - додано приклади ручного запуску для CI, cron і DR сценаріїв.
+- Під час live deploy test виявлено й виправлено edge case у `scripts/bootstrap-admin.sh`:
+  - Swarm rolling update може зупинити task-контейнер після того, як hook уже зберіг його id;
+  - `wait_for_dspace_cli_ready` тепер на кожній спробі повторно знаходить актуальний running task контейнер сервісу `${STACK_NAME}_dspace`.
+- Виправлено restart-on-change trigger у `scripts/patch-local.cfg.sh`:
+  - раніше повний запуск завжди ставив backend restart flag через наявність модуля `db_rotation`;
+  - тепер restart flag ставиться тільки якщо checksum `dspace/config/local.cfg` реально змінився.
+- Додано manifest checksum guard у `scripts/deploy-orchestrator-swarm.sh`:
+  - checksum зберігається у `.orchestrator-state/${STACK_NAME}.stack.sha256`;
+  - якщо manifest не змінився, `docker stack deploy` пропускається;
+  - для примусового redeploy доступний `ORCHESTRATOR_FORCE_DEPLOY=true`.
+
+### Перевірено
+- `bash -n scripts/deploy-orchestrator-swarm.sh scripts/*.sh scripts/lib/*.sh scripts/lib/patch-local/*.sh scripts/lib/patch-config/*.sh scripts/lib/smoke-test/*.sh` — OK.
+- Live deploy test:
+  - `ORCHESTRATOR_MODE=swarm ENVIRONMENT_NAME=development STACK_NAME=dspace ORCHESTRATOR_ENV_FILE=<decrypted env.dev.enc> bash scripts/deploy-orchestrator-swarm.sh`.
+- Перший deploy-прогін:
+  - `docker stack deploy` виконався;
+  - post-deploy hook впав на старому stopped task id, що підтвердило rolling-update race.
+- Після fix:
+  - повторний deploy-прогін завершився `Swarm deploy completed`;
+  - `bootstrap-admin.sh` підтвердив, що admin уже існує, нового admin не створено;
+  - restart-on-change виконав `docker service update --force dspace_dspace`;
+  - `dspace_dspace` converged.
+- Після виправлення no-change trigger:
+  - повторний `patch-local.cfg.sh --no-restart` з тим самим `env.dev.enc` не створює restart flag (`NO_FLAG`).
+- Після додавання manifest checksum guard:
+  - повторний повний no-change запуск `scripts/deploy-orchestrator-swarm.sh` пропустив `docker stack deploy`;
+  - post-deploy `bootstrap-admin.sh` підтвердив, що admin уже існує;
+  - orchestrator завершився з `Backend restart not required`;
+  - backend task id не змінився (`sohfdiqlz3r41msyv94kmkvxi` залишився running).
+- Runtime статус:
+  - `docker service ls --filter label=com.docker.stack.namespace=dspace` -> усі сервіси `1/1`;
+  - `GET https://repo.pinokew.buzz/server/api/core/sites` -> `HTTP 200`.
+
+### Data/impact
+- Виконано live redeploy стеку `dspace` і forced update backend-сервісу через config-change flag.
+- Змін у БД/Solr/assetstore даних не виконувалось.
+
+## 2026-04-26 — Category 2 autonomous scripts switched to Swarm runtime
+
+### Контекст
+- Автономні скрипти Категорії 2 мали працювати поза CI/CD через `SERVER_ENV`/SOPS і production Swarm runtime, а не напряму через compose або hardcoded container names.
+
+### Оновлено
+- `scripts/lib/docker-runtime.sh`
+- `scripts/backup-dspace.sh`
+- `scripts/restore-backup.sh`
+- `scripts/run-maintenance.sh`
+- `scripts/sync-user-groups.sh`
+
+### Зміни
+- Додано runtime helper з default `DOCKER_RUNTIME_MODE=swarm`, `STACK_NAME=dspace` і compose fallback для локального dev.
+- `backup-dspace.sh` виконує DB dump через `docker_runtime_exec dspacedb`; додано `--dry-run` без dump/upload/archive.
+- `restore-backup.sh` підтримує `--dry-run` без confirmation prompts і моделює Swarm scale/restore/reindex кроки без зміни даних.
+- `run-maintenance.sh` виконує DSpace CLI через Swarm service `dspace`; `--dry-run` не виконує CLI, unmount, killall або poweroff.
+- `sync-user-groups.sh` виконує SQL через Swarm service `dspacedb`; `--dry-run` друкує SQL без mutation.
+
+### Перевірено
+- `bash -n` і `shellcheck` для змінених DSpace скриптів — OK.
+- `backup-dspace.sh --env dev --dry-run` — OK.
+- `run-maintenance.sh --env dev --dry-run` — OK, poweroff не виконувався.
+- `sync-user-groups.sh --env dev --dry-run` — OK, SQL mutation не виконувалась.
+- `restore-backup.sh --env dev --dry-run <tmp-test-archive>` — OK, destructive кроки тільки надруковані.
+- Read-only Swarm DB check: `docker_runtime_exec dspacedb pg_isready` — OK.

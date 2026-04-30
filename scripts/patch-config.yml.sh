@@ -2,7 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-ENV_FILE="$SCRIPT_DIR/../.env"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_FILE="${ORCHESTRATOR_ENV_FILE:-${PROJECT_ROOT}/.env}"
 TARGET_FILE="$SCRIPT_DIR/../ui-config/config.yml"
 
 LIB_DIR="$SCRIPT_DIR/lib/patch-config"

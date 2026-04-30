@@ -2,7 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-ENV_FILE="$SCRIPT_DIR/../.env"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_FILE="${ORCHESTRATOR_ENV_FILE:-${PROJECT_ROOT}/.env}"
 TARGET_FILE="dspace/config/local.cfg"
 
 LIB_DIR="$SCRIPT_DIR/lib/patch-local"
@@ -77,6 +78,13 @@ restart_backend_container() {
 
     echo "⚠️ Could not find backend container/service to restart ($container_name/$service_name)."
     return 0
+}
+
+mark_backend_restart_required() {
+    if [ -n "${DSPACE_BACKEND_RESTART_FLAG_FILE:-}" ]; then
+        mkdir -p "$(dirname "$DSPACE_BACKEND_RESTART_FLAG_FILE")"
+        printf 'patch-local.cfg.sh\n' >> "$DSPACE_BACKEND_RESTART_FLAG_FILE"
+    fi
 }
 
 usage() {
@@ -180,7 +188,8 @@ ensure_target_file() {
     local target_file="$1"
 
     if [ -d "$target_file" ]; then
-        local backup_path="${target_file}.dir-backup.$(date +%Y%m%d%H%M%S)"
+        local backup_path
+        backup_path="${target_file}.dir-backup.$(date +%Y%m%d%H%M%S)"
         echo "⚠️  Found directory at $target_file. Moving it to $backup_path"
         if [ "$DRY_RUN" = "true" ]; then
             echo "[dry-run] would move $target_file to $backup_path"
@@ -236,16 +245,12 @@ main() {
         config_changed="true"
     fi
 
-    local requires_restart="false"
-    if [ "$config_changed" = "true" ] || has_module "db_rotation" "${modules_to_run[@]}"; then
-        requires_restart="true"
-    fi
-
     if [ "$DRY_RUN" = "true" ]; then
         echo "✅ Dry-run finished. No files or DB credentials were changed."
     else
         echo "✅ Configuration patched successfully."
-        if [ "$requires_restart" = "true" ]; then
+        if [ "$config_changed" = "true" ]; then
+            mark_backend_restart_required
             restart_backend_container
         else
             echo "ℹ️ No backend config changes detected. Restart not required."

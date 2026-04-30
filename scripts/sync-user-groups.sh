@@ -1,38 +1,63 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Скрипт для синхронізації користувачів з OIDC групи в DSpace
-# Використовує UUID групи з .env та додає користувачів, які мають email з певним доменом, до цієї групи в базі даних DSpace. 
+# Використовує UUID групи з env.<env>.enc та додає користувачів, які мають email з певним доменом, до цієї групи в базі даних DSpace. 
 # Додай рядок, щоб запускати скрипт, наприклад, кожні 10 хвилин (або щогодини):
 # crontab -e
 # */10 * * * * /home/pinokew/Dspace/DSpace-docker/scripts/sync-user-groups.sh >> /var/log/dspace-sync.log 2>&1  
 
-set -e
+set -euo pipefail
 
-# --- Load Environment ---
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-ENV_FILE="$SCRIPT_DIR/../.env"
+PROJECT_ROOT="$SCRIPT_DIR/.."
+ENVIRONMENT_ARG="${1:-}"
+DRY_RUN=false
 
-if [ -f "$ENV_FILE" ]; then
-    while IFS='=' read -r key value; do
-        [[ "$key" =~ ^#.*$ ]] && continue
-        [[ -z "$key" ]] && continue
-        # Clean value from quotes and spaces
-        value=$(echo "$value" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
-        export "$key=$value"
-    done < <(grep -vE '^\s*#' "$ENV_FILE" | grep -vE '^\s*$')
-fi
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --env)
+      shift
+      [[ $# -gt 0 ]] || { echo "ERROR: Missing value for --env" >&2; exit 1; }
+      ENVIRONMENT_ARG="$1"
+      ;;
+    --env=*)
+      ENVIRONMENT_ARG="${1#--env=}"
+      ;;
+    --dry-run)
+      DRY_RUN=true
+      ;;
+    -h|--help)
+    echo "Usage: $0 [--env dev|prod] [--dry-run]"
+    exit 0
+      ;;
+    dev|development|prod|production)
+      ENVIRONMENT_ARG="$1"
+      ;;
+    *)
+      echo "ERROR: unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+# --- Load env.<env>.enc через локальну SOPS-розшифровку ---
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/autonomous-env.sh"
+load_autonomous_env "$PROJECT_ROOT" "$ENVIRONMENT_ARG"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/docker-runtime.sh"
 
 # --- Configuration ---
-GROUP_UUID="${OIDC_LOGIN_GROUP_UUID}"
-DOMAIN_SUFFIX="${OIDC_DOMAIN}"
+GROUP_UUID="${OIDC_LOGIN_GROUP_UUID:-}"
+DOMAIN_SUFFIX="${OIDC_DOMAIN:-}"
 
-DB_CONTAINER="dspacedb"
 DB_USER="${POSTGRES_USER:-dspace}"
 DB_NAME="${POSTGRES_DB:-dspace}"
 DB_PASSWORD="${POSTGRES_PASSWORD:-dspace}"
 
 # --- Validation ---
 if [ -z "$GROUP_UUID" ] || [ -z "$DOMAIN_SUFFIX" ]; then
-    echo "❌ Error: OIDC_LOGIN_GROUP_UUID or OIDC_DOMAIN is missing in .env"
+    echo "❌ Error: OIDC_LOGIN_GROUP_UUID or OIDC_DOMAIN is missing in env file"
     exit 1
 fi
 
@@ -63,7 +88,13 @@ WHERE e.email LIKE '%$TARGET_DOMAIN'
 
 # --- Execution ---
 # Використовуємо Pipe метод для передачі пароля та запиту
-echo "$SQL_QUERY" | docker exec -i -e PGPASSWORD="$DB_PASSWORD" "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -w > /tmp/sync_output.txt 2>&1
+if [[ "$DRY_RUN" == true ]]; then
+    echo "[dry-run] SQL to execute:"
+    echo "$SQL_QUERY"
+    exit 0
+fi
+
+echo "$SQL_QUERY" | docker_runtime_exec dspacedb env PGPASSWORD="$DB_PASSWORD" psql -U "$DB_USER" -d "$DB_NAME" -w > /tmp/sync_output.txt 2>&1
 
 OUTPUT=$(cat /tmp/sync_output.txt)
 rm /tmp/sync_output.txt

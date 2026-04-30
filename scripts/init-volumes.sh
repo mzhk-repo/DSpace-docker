@@ -31,13 +31,23 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-ENV_FILE="$SCRIPT_DIR/../.env"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ENV_FILE="${ORCHESTRATOR_ENV_FILE:-}"
 DOCKER_IMAGE="${INIT_VOLUMES_HELPER_IMAGE:-alpine:3.20}"
 
-if [[ ! -f "$ENV_FILE" ]]; then
-  echo "❌ Error: .env file not found at: $ENV_FILE" >&2
+if [[ -n "${ORCHESTRATOR_ENV_FILE:-}" && ! -f "${ORCHESTRATOR_ENV_FILE}" ]]; then
+  echo "[init-volumes] ERROR: ORCHESTRATOR_ENV_FILE не знайдено: ${ORCHESTRATOR_ENV_FILE}" >&2
   exit 1
+fi
+
+if [[ -z "$ENV_FILE" ]]; then
+  if [[ ! -f "${PROJECT_ROOT}/.env" ]]; then
+    echo "[init-volumes] ERROR: env file не знайдено. Передай ORCHESTRATOR_ENV_FILE або поклади .env для локального dev." >&2
+    exit 1
+  fi
+  ENV_FILE="${PROJECT_ROOT}/.env"
+  echo "[init-volumes] WARNING: ORCHESTRATOR_ENV_FILE не передано. Fallback на локальний .env — тільки для dev." >&2
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -45,25 +55,62 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "🌍 Loading environment variables from .env..."
-while IFS='=' read -r key value; do
-  [[ "$key" =~ ^\s*# ]] && continue
-  [[ -z "${key//[[:space:]]/}" ]] && continue
+load_env_file() {
+  local env_file="$1"
+  local line key value
 
-  key=$(echo "$key" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-  value=$(echo "${value:-}" | sed \
-    -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
-    -e 's/^"//' -e 's/"$//' \
-    -e "s/^'//" -e "s/'$//")
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="${line%$'\r'}"
+    [[ -z "${line//[[:space:]]/}" ]] && continue
+    [[ "${line}" =~ ^[[:space:]]*# ]] && continue
 
-  export "$key=$value"
-done < <(grep -vE '^\s*#' "$ENV_FILE" | grep -vE '^\s*$')
+    line="$(printf '%s' "${line}" | sed -E 's/^[[:space:]]*export[[:space:]]+//')"
+    [[ "${line}" == *"="* ]] || continue
 
-: "${VOL_POSTGRESQL_PATH:?VOL_POSTGRESQL_PATH is required in .env}"
-: "${VOL_SOLR_PATH:?VOL_SOLR_PATH is required in .env}"
-: "${VOL_ASSETSTORE_PATH:?VOL_ASSETSTORE_PATH is required in .env}"
-: "${VOL_EXPORTS_PATH:?VOL_EXPORTS_PATH is required in .env}"
-: "${VOL_LOGS_PATH:?VOL_LOGS_PATH is required in .env}"
+    key="${line%%=*}"
+    value="${line#*=}"
+
+    key="$(printf '%s' "${key}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    [[ "${key}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+
+    value="$(printf '%s' "${value}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    if [[ "${value}" =~ ^\".*\"$ ]]; then
+      value="${value:1:${#value}-2}"
+    elif [[ "${value}" =~ ^\'.*\'$ ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+
+    printf -v "${key}" '%s' "${value}"
+    export "${key?}"
+  done < "${env_file}"
+}
+
+require_env_keys() {
+  local missing=()
+  local key
+
+  for key in "$@"; do
+    if [[ -z "${!key:-}" ]]; then
+      missing+=("${key}")
+    fi
+  done
+
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    printf '[init-volumes] ERROR: missing required variable(s) in %s: %s\n' \
+      "${ENV_FILE}" "${missing[*]}" >&2
+    exit 1
+  fi
+}
+
+echo "🌍 Loading environment variables from ${ENV_FILE}..."
+load_env_file "${ENV_FILE}"
+
+require_env_keys \
+  VOL_POSTGRESQL_PATH \
+  VOL_SOLR_PATH \
+  VOL_ASSETSTORE_PATH \
+  VOL_EXPORTS_PATH \
+  VOL_LOGS_PATH
 
 VOL_PG="$VOL_POSTGRESQL_PATH"
 VOL_SOLR="$VOL_SOLR_PATH"

@@ -2,7 +2,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-ENV_FILE="$SCRIPT_DIR/../.env"
 
 LIB_DIR="$SCRIPT_DIR/lib/smoke-test"
 # shellcheck disable=SC1091
@@ -15,19 +14,21 @@ source "$LIB_DIR/modules.sh"
 DRY_RUN="false"
 MODULES_RAW=""
 LIST_MODULES="false"
+ENVIRONMENT_ARG=""
 
 usage() {
   cat <<EOF
 Usage: ./scripts/smoke-test.sh [options]
 
 Options:
+  --env ENV            Environment для env.ENV.enc (dev/development або prod/production)
   --dry-run            Print checks without network calls
   --modules M1,M2      Run only selected modules (comma separated)
   --list-modules       Print available module names
   -h, --help           Show this help
 
 Examples:
-  ./scripts/smoke-test.sh
+  ./scripts/smoke-test.sh --env dev
   ./scripts/smoke-test.sh --dry-run
   ./scripts/smoke-test.sh --modules required_checks,security_headers
 EOF
@@ -36,6 +37,14 @@ EOF
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --env)
+        if [[ $# -lt 2 ]]; then
+          echo "❌ Missing value for --env"
+          exit 1
+        fi
+        ENVIRONMENT_ARG="$2"
+        shift 2
+        ;;
       --dry-run)
         DRY_RUN="true"
         shift
@@ -109,6 +118,7 @@ normalize_modules() {
 }
 
 main() {
+  trap cleanup_smoke_env EXIT
   parse_args "$@"
 
   if [ "$LIST_MODULES" = "true" ]; then
@@ -116,7 +126,7 @@ main() {
     exit 0
   fi
 
-  load_env_file "$ENV_FILE"
+  load_env_for_environment "${ENVIRONMENT_ARG}"
 
   log "🚦 Smoke tests starting"
   log "   dry-run: $DRY_RUN"
