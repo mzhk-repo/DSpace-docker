@@ -35,15 +35,29 @@ done
 echo "🚀 Starting KDV DSpace Configuration Setup..."
 echo "---------------------------------------------"
 
-# Даємо права на виконання (про всяк випадок)
-chmod +x "$SCRIPT_DIR/patch-local.cfg.sh"
-chmod +x "$SCRIPT_DIR/patch-config.yml.sh"
-chmod +x "$SCRIPT_DIR/patch-submission-forms.sh"
+run_patch_script() {
+  local script_path="$1"
+  shift
+
+  if [[ -x "$script_path" ]]; then
+    "$script_path" "$@"
+    return
+  fi
+
+  if [[ -f "$script_path" ]]; then
+    echo "ℹ️ $script_path не має executable-біта; запускаю через bash."
+    bash "$script_path" "$@"
+    return
+  fi
+
+  echo "❌ Patch script not found: $script_path" >&2
+  exit 1
+}
 
 # Запускаємо скрипти по черзі
-"$SCRIPT_DIR/patch-local.cfg.sh" "${PATCH_ARGS[@]}"
-"$SCRIPT_DIR/patch-config.yml.sh" "${PATCH_ARGS[@]}"
-"$SCRIPT_DIR/patch-submission-forms.sh"
+run_patch_script "$SCRIPT_DIR/patch-local.cfg.sh" "${PATCH_ARGS[@]}"
+run_patch_script "$SCRIPT_DIR/patch-config.yml.sh" "${PATCH_ARGS[@]}"
+run_patch_script "$SCRIPT_DIR/patch-submission-forms.sh"
 
 echo "---------------------------------------------"
 echo "🎉 All configurations updated from env file!"
