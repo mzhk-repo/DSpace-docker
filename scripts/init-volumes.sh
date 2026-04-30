@@ -110,13 +110,15 @@ require_env_keys \
   VOL_SOLR_PATH \
   VOL_ASSETSTORE_PATH \
   VOL_EXPORTS_PATH \
-  VOL_LOGS_PATH
+  VOL_LOGS_PATH \
+  BACKUP_LOCAL_DIR
 
 VOL_PG="$VOL_POSTGRESQL_PATH"
 VOL_SOLR="$VOL_SOLR_PATH"
 VOL_ASSET="$VOL_ASSETSTORE_PATH"
 VOL_EXPORT="$VOL_EXPORTS_PATH"
 VOL_LOGS="$VOL_LOGS_PATH"
+VOL_BACKUP="$BACKUP_LOCAL_DIR"
 
 POSTGRES_UID="${POSTGRES_UID:-999}"
 POSTGRES_GID="${POSTGRES_GID:-999}"
@@ -124,6 +126,8 @@ SOLR_UID="${SOLR_UID:-8983}"
 SOLR_GID="${SOLR_GID:-8983}"
 DSPACE_UID="${DSPACE_UID:-1000}"
 DSPACE_GID="${DSPACE_GID:-1000}"
+BACKUP_UID="${BACKUP_UID:-$(id -u)}"
+BACKUP_GID="${BACKUP_GID:-$(id -g)}"
 
 guard_path() {
   local path="$1"
@@ -172,9 +176,10 @@ guard_path "$VOL_SOLR"
 guard_path "$VOL_ASSET"
 guard_path "$VOL_EXPORT"
 guard_path "$VOL_LOGS"
+guard_path "$VOL_BACKUP"
 
 echo "==> Creating volume directories..."
-for p in "$VOL_PG" "$VOL_SOLR" "$VOL_ASSET" "$VOL_EXPORT" "$VOL_LOGS"; do
+for p in "$VOL_PG" "$VOL_SOLR" "$VOL_ASSET" "$VOL_EXPORT" "$VOL_LOGS" "$VOL_BACKUP"; do
   ensure_dir "$p"
 done
 
@@ -190,6 +195,9 @@ run_on_volume "$VOL_ASSET" "chown -R ${DSPACE_UID}:${DSPACE_GID} /target && chmo
 run_on_volume "$VOL_EXPORT" "chown -R ${DSPACE_UID}:${DSPACE_GID} /target && chmod 775 /target"
 run_on_volume "$VOL_LOGS" "chown -R ${DSPACE_UID}:${DSPACE_GID} /target && chmod 775 /target"
 
+echo " -> Backup directory (${BACKUP_UID}:${BACKUP_GID})"
+run_on_volume "$VOL_BACKUP" "chown -R ${BACKUP_UID}:${BACKUP_GID} /target && chmod 750 /target"
+
 if $FIX_EXISTING; then
   echo "==> --fix-existing enabled: normalizing permissions inside volumes."
 
@@ -203,9 +211,12 @@ if $FIX_EXISTING; then
   run_on_volume "$VOL_ASSET" "find /target -type d -exec chmod 775 {} + && find /target -type f -exec chmod 664 {} +"
   run_on_volume "$VOL_EXPORT" "find /target -type d -exec chmod 775 {} + && find /target -type f -exec chmod 664 {} +"
   run_on_volume "$VOL_LOGS" "find /target -type d -exec chmod 775 {} + && find /target -type f -exec chmod 664 {} +"
+
+  echo " -> Backup directory modes (dirs=750, files=640)"
+  run_on_volume "$VOL_BACKUP" "find /target -type d -exec chmod 750 {} + && find /target -type f -exec chmod 640 {} +"
 fi
 
 echo "==> Done! Volumes are ready."
-for p in "$VOL_PG" "$VOL_SOLR" "$VOL_ASSET" "$VOL_EXPORT" "$VOL_LOGS"; do
+for p in "$VOL_PG" "$VOL_SOLR" "$VOL_ASSET" "$VOL_EXPORT" "$VOL_LOGS" "$VOL_BACKUP"; do
   ls -ld "$p" 2>/dev/null || echo "   $p"
 done

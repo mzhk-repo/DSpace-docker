@@ -75,8 +75,9 @@ shred -u "${ENV_TMP}" 2>/dev/null || rm -f "${ENV_TMP}"
 ### `scripts/init-volumes.sh`
 
 #### Бізнес-логіка
-- Створює bind-mount директорії для PostgreSQL, Solr, assetstore, exports, logs.
+- Створює bind-mount директорії для PostgreSQL, Solr, assetstore, exports, logs та `BACKUP_LOCAL_DIR`.
 - Виставляє ownership/permissions через ephemeral Docker container.
+- Для `BACKUP_LOCAL_DIR` виставляє ownership на `BACKUP_UID:BACKUP_GID` з fallback на поточного користувача, який запускає `init-volumes.sh`.
 - Ідемпотентний: `mkdir -p`, повторне застосування permissions без дублювання.
 
 #### Manual execution
@@ -165,14 +166,19 @@ bash -lc 'source scripts/lib/autonomous-env.sh; load_autonomous_env "$PWD" dev; 
 ### `scripts/backup-dspace.sh`
 
 #### Бізнес-логіка
-- Створює SQL dump, metadata cloud archive та full local archive з assetstore.
+- Створює SQL dump, metadata cloud archive з checksum та full local archive з assetstore.
 - Архівує encrypted `env.<env>.enc`, а не plaintext `.env`.
-- Завантажує cloud archive через `rclone` і чистить старі локальні архіви.
+- Завантажує cloud archive/checksum через `rclone` і перевіряє upload через `rclone check`.
+- Синхронізує локальне дзеркало assetstore через `rsync`, зберігаючи видалені файли в `assetstore-deleted/${DATE}`.
+- Зберігає metadata archives/checksums локально в `BACKUP_LOCAL_DIR` і чистить `full_local_*`, локальні `cloud_metadata_*` та `assetstore-deleted/*` за окремими retention-змінними.
+- Очікує, що `BACKUP_LOCAL_DIR` підготовлено через `scripts/init-volumes.sh`; backup-скрипт має fallback-ініціалізацію, але cron-сценарій не повинен залежати від passwordless sudo.
 
 #### Manual execution
 ```bash
+bash scripts/backup-dspace.sh --env dev --dry-run
+bash scripts/backup-dspace.sh --env prod --dry-run
 SERVER_ENV=dev bash scripts/backup-dspace.sh
-bash scripts/backup-dspace.sh --env prod
+SERVER_ENV=prod bash scripts/backup-dspace.sh
 ```
 
 ### `scripts/restore-backup.sh`
