@@ -1,11 +1,13 @@
 ## 2026-09-19 — Генерація thumbnail для item без обкладинки
 
 ### Зроблено
-- Додано `scripts/generate-item-thumbnail.sh` для обробки одного item за handle або UUID.
+- `scripts/generate-item-thumbnail.sh` розширено режимом `--all` для обробки всіх items без generated thumbnail.
 - Wrapper запускає штатний DSpace `PDFBox JPEG Thumbnail` для першої сторінки PDF у `ORIGINAL` bundle.
-- Додано `--dry-run`, інтерактивне підтвердження, `--yes`, перевірку identifier і Swarm/Compose runtime.
+- Режим `--all` не потребує `--yes` і придатний для systemd timer; одиночний item зберігає інтерактивне підтвердження.
+- Збережено `--dry-run`, `--yes`, перевірку identifier і Swarm/Compose runtime.
 - Скрипт не використовує `-f`, REST, SQL, нові секрети або прямі операції з assetstore.
 - `docs/scripts_runbook.md` доповнено manual execution.
+- У `.github/workflows/main.yml` додано `deploy-change-check`: operational-only scripts запускають CI без CD, а deploy/startup/payload/patch-зміни зберігають звичайний deploy-контур.
 
 ### Перевірено
 - `bash -n scripts/generate-item-thumbnail.sh` — OK.

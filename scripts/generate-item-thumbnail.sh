@@ -7,15 +7,17 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd -P)
 ENVIRONMENT_ARG=""
 ITEM_IDENTIFIER=""
+PROCESS_ALL=false
 DRY_RUN=false
 ASSUME_YES=false
 
 usage() {
   cat <<'EOF'
-Usage: scripts/generate-item-thumbnail.sh --item HANDLE_OR_UUID [options]
+Usage: scripts/generate-item-thumbnail.sh (--item HANDLE_OR_UUID | --all) [options]
 
 Options:
   --item HANDLE_OR_UUID  DSpace item handle or UUID (required).
+  --all                  Process all items missing generated thumbnails; timer-safe.
   --env dev|prod         Select env.<env>.enc. SERVER_ENV also works.
   --dry-run              Print the DSpace command without running it.
   --yes                  Skip the interactive confirmation.
@@ -42,6 +44,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --item=*)
       ITEM_IDENTIFIER="${1#--item=}"
+      shift
+      ;;
+    --all)
+      PROCESS_ALL=true
       shift
       ;;
     --env)
@@ -71,8 +77,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -n "$ITEM_IDENTIFIER" ]] || die "--item is required"
-is_valid_identifier "$ITEM_IDENTIFIER" || die "Invalid item handle or UUID: $ITEM_IDENTIFIER"
+if [[ "$PROCESS_ALL" == true ]]; then
+  [[ -z "$ITEM_IDENTIFIER" ]] || die "Use either --all or --item, not both"
+else
+  [[ -n "$ITEM_IDENTIFIER" ]] || die "Either --item or --all is required"
+  is_valid_identifier "$ITEM_IDENTIFIER" || die "Invalid item handle or UUID: $ITEM_IDENTIFIER"
+fi
 
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/autonomous-env.sh"
@@ -80,9 +90,14 @@ load_autonomous_env "$PROJECT_ROOT" "$ENVIRONMENT_ARG"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/docker-runtime.sh"
 
-filter_cmd=(/dspace/bin/dspace filter-media -i "$ITEM_IDENTIFIER" -p "PDFBox JPEG Thumbnail")
+if [[ "$PROCESS_ALL" == true ]]; then
+  filter_cmd=(/dspace/bin/dspace filter-media -p "PDFBox JPEG Thumbnail")
+  echo "Scope: all items missing generated thumbnails"
+else
+  filter_cmd=(/dspace/bin/dspace filter-media -i "$ITEM_IDENTIFIER" -p "PDFBox JPEG Thumbnail")
+  echo "Item: $ITEM_IDENTIFIER"
+fi
 
-echo "Item: $ITEM_IDENTIFIER"
 echo "Filter: PDFBox JPEG Thumbnail"
 echo "Output: THUMBNAIL bundle"
 
@@ -93,7 +108,9 @@ if [[ "$DRY_RUN" == true ]]; then
   exit 0
 fi
 
-if [[ "$ASSUME_YES" != true ]]; then
+if [[ "$PROCESS_ALL" == true ]]; then
+  echo "Batch mode is non-interactive and suitable for systemd timers"
+elif [[ "$ASSUME_YES" != true ]]; then
   [[ -t 0 ]] || die "Interactive confirmation requires a TTY; use --yes for an explicit non-interactive run"
   read -r -p "Generate thumbnail for '$ITEM_IDENTIFIER'? Type 'yes' to continue: " confirmation
   [[ "$confirmation" == "yes" ]] || die "Operation cancelled"
@@ -108,7 +125,7 @@ filter_output="$(docker_runtime_exec dspace "${filter_cmd[@]}" 2>&1)" || {
 }
 printf '%s\n' "$filter_output"
 
-if ! grep -Eq 'FILTERED:|SKIPPED:' <<<"$filter_output"; then
+if [[ "$PROCESS_ALL" != true ]] && ! grep -Eq 'FILTERED:|SKIPPED:' <<<"$filter_output"; then
   die "No supported PDF was processed and no existing generated thumbnail was reported"
 fi
 
