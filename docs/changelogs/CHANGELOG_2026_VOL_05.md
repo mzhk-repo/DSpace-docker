@@ -1,3 +1,23 @@
+## 2026-09-19 — Генерація thumbnail для item без обкладинки
+
+### Зроблено
+- Додано `scripts/generate-item-thumbnail.sh` для обробки одного item за handle або UUID.
+- Wrapper запускає штатний DSpace `PDFBox JPEG Thumbnail` для першої сторінки PDF у `ORIGINAL` bundle.
+- Додано `--dry-run`, інтерактивне підтвердження, `--yes`, перевірку identifier і Swarm/Compose runtime.
+- Скрипт не використовує `-f`, REST, SQL, нові секрети або прямі операції з assetstore.
+- `docs/scripts_runbook.md` доповнено manual execution.
+
+### Перевірено
+- `bash -n scripts/generate-item-thumbnail.sh` — OK.
+- `shellcheck scripts/generate-item-thumbnail.sh` — OK.
+- `bash scripts/generate-item-thumbnail.sh --help` — OK.
+- `bash scripts/generate-item-thumbnail.sh --env dev --item 123456789/42 --dry-run` — OK.
+- `bash scripts/generate-item-thumbnail.sh --env dev --item 00000000-0000-4000-8000-000000000000 --dry-run` — OK.
+- Runtime generation у dev/prod не виконувався.
+
+### Data/impact
+- Зміни DSpace item, assetstore або production runtime не виконувались.
+
 ## 2026-05-11 — Assetstore orphan cleanup wrapper
 
 ### Зроблено

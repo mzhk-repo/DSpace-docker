@@ -212,6 +212,21 @@ bash scripts/cleanup-assetstore-orphans.sh --env prod --dry-run
 SERVER_ENV=prod bash scripts/cleanup-assetstore-orphans.sh
 ```
 
+### `scripts/generate-item-thumbnail.sh`
+
+#### Бізнес-логіка
+- Генерує thumbnail першої сторінки PDF для одного DSpace item через штатний `PDFBox JPEG Thumbnail` media filter.
+- Item передається як handle або UUID; результат зберігається у стандартному bundle `THUMBNAIL`.
+- Без `--yes` скрипт вимагає інтерактивне підтвердження. Наявні generated thumbnails не перегенеровуються, бо filter запускається без `-f`.
+- `--dry-run` тільки показує команду та не звертається до DSpace runtime.
+
+#### Manual execution
+```bash
+bash scripts/generate-item-thumbnail.sh --env dev --item 123456789/42 --dry-run
+bash scripts/generate-item-thumbnail.sh --env dev --item 123456789/42
+bash scripts/generate-item-thumbnail.sh --env prod --item 00000000-0000-4000-8000-000000000000 --yes
+```
+
 ### `scripts/restore-backup.sh`
 
 #### Бізнес-логіка
