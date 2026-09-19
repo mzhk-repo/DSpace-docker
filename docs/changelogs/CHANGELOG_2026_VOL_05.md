@@ -1,3 +1,14 @@
+## 2026-09-19 — CI deploy gate shell syntax hotfix
+
+### Виправлено
+- У `.github/workflows/main.yml` додано явне shell-продовження рядків у багаторядковому `case` для списку operational-only paths.
+- Усунуто `syntax error near unexpected token 'newline'` у GitHub Actions runner.
+
+### Перевірено
+- Bash syntax для deploy-change-check `case` block — OK.
+- Workflow YAML parse — OK.
+- `git diff --check -- .github/workflows/main.yml` — OK.
+
 ## 2026-09-19 — Генерація thumbnail для item без обкладинки
 
 ### Зроблено

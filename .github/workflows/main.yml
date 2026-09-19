@@ -59,16 +59,16 @@ jobs:
           for path in "${changed_files[@]}"; do
             case "$path" in
               # Operational/manual scripts: CI still runs, CD must be skipped.
-              scripts/backup-dspace.sh|
-              scripts/lib/backup-*.sh|
-              scripts/lib/autonomous-env.sh|
-              scripts/lib/docker-runtime.sh|
-              scripts/cleanup-assetstore-orphans.sh|
-              scripts/generate-item-thumbnail.sh|
-              scripts/restore-backup.sh|
-              scripts/run-maintenance.sh|
-              scripts/sync-user-groups.sh|
-              scripts/test-restore.sh|
+              scripts/backup-dspace.sh|\
+              scripts/lib/backup-*.sh|\
+              scripts/lib/autonomous-env.sh|\
+              scripts/lib/docker-runtime.sh|\
+              scripts/cleanup-assetstore-orphans.sh|\
+              scripts/generate-item-thumbnail.sh|\
+              scripts/restore-backup.sh|\
+              scripts/run-maintenance.sh|\
+              scripts/sync-user-groups.sh|\
+              scripts/test-restore.sh|\
               docs/**)
                 ;;
               *)
