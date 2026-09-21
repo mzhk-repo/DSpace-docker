@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generate a missing item thumbnail from the first supported PDF page.
+# Generate a missing item thumbnail from the first supported PDF page..
 
 set -euo pipefail
 
