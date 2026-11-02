@@ -215,3 +215,5 @@ networks:
   proxy-net:
     external: true
     name: ${EXTERNAL_NETWORK}
+  smtp2graph_internal_enc:
+    external: true

@@ -1,3 +1,18 @@
+## 2026-11-02 — DSpace login token and idle timeout
+
+### Changed
+- Set the DSpace login JWT lifetime to 24 hours for all authentication methods.
+- Configure the UI idle warning after 23 hours 55 minutes and logout after a further 5 minutes. Active sessions may refresh their JWT.
+- Documented the session behavior and longer-lived token risk in the configuration runbook.
+
+### Verified
+- `bash -n` and `shellcheck` passed for the modified modules and their entry scripts.
+- Isolated generation confirmed the JWT setting is idempotent and the generated UI YAML contains the expected idle settings.
+
+### Pending
+- OIDC return-page behavior, actual JWT lifetime, and UI idle behavior require dev runtime verification. No browser or authenticated dev session was available; the redirect cause and any configuration-only fix remain unconfirmed.
+- No deployment or runtime change was performed. A longer-lived stolen token may remain usable longer.
+
 ## 2026-09-19 — CI deploy gate shell syntax hotfix
 
 ### Виправлено

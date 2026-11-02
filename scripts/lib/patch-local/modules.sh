@@ -112,6 +112,7 @@ module_cors() {
 module_auth() {
     echo "🔧 [module] auth"
     set_config "plugin.sequence.org.dspace.authenticate.AuthenticationMethod" "${AUTH_METHODS:-org.dspace.authenticate.OidcAuthentication, org.dspace.authenticate.PasswordAuthentication}" "$TARGET_FILE"
+    set_config "jwt.login.token.expiration" "86400000" "$TARGET_FILE"
 }
 
 module_oidc() {

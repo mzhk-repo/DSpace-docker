@@ -292,6 +292,13 @@ chmod 600 .env
 - `DSPACE_MAIL_FEEDBACK`
 
 ### SSO/OIDC (auth + oidc модулі)
+
+The `auth` module sets the DSpace login JWT lifetime to 24 hours for all login
+methods. The UI configuration warns after 23 hours 55 minutes of inactivity and
+logs out after a further 5 minutes. JWT refresh can extend an active session;
+this is not an absolute 24-hour session limit. A longer token lifetime increases
+the time a stolen token may remain usable. The servlet session timeout is separate.
+
 - `AUTH_METHODS`
 - `OIDC_CLIENT_ID`
 - `OIDC_CLIENT_SECRET`
