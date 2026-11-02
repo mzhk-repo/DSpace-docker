@@ -1,3 +1,13 @@
+## 2026-11-02 — Resolve Angular image Hadolint findings
+
+### Changed
+- Pinned PM2 to `7.1.1` and specified the Node image's numeric user and group IDs (`1000:1000`).
+- Scoped the Alpine package version lint exception to the build dependencies; their versions continue to follow the floating base image.
+
+### Verified
+- Hadolint `v2.15.1` passed for `ui/Dockerfile`.
+- The Dockerfile change generates a new UI image reference; rebuilding and runtime verification remain pending.
+
 ## 2026-11-02 — Fix Angular image GHCR namespace and preserve build cache
 
 ### Changed
