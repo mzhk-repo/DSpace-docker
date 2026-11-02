@@ -1,3 +1,13 @@
+## 2026-11-02 — Fix Angular image GHCR namespace and preserve build cache
+
+### Changed
+- Corrected the Angular image namespace to the repository owner's `mzhk-repo` GHCR namespace and added a CI owner check before building.
+- Added a Buildx cache exported before the image is published, allowing later runs to reuse a successful build even if publishing fails.
+
+### Context
+- CI run `41440206025` built the image but failed to publish it under `pinokew`; the GitHub repository owner is `mzhk-repo`.
+- The package publication and Swarm pull have not yet been verified with the corrected namespace.
+
 ## 2026-11-02 — Correct SMTP authentication diagnosis
 
 ### Context

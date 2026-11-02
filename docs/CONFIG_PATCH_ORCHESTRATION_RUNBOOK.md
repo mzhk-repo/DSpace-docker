@@ -305,7 +305,9 @@ the UI from the commit in `ui/UPSTREAM_REF` and fails if the patch no longer
 applies. To upgrade Angular, update that commit, review the patch against the
 new source, build the image and verify OIDC login in dev.
 
-CI builds the image and publishes it to GHCR on dev pushes and releases. Its
+CI builds the image and publishes it to `ghcr.io/mzhk-repo/dspace-angular` on
+dev pushes and releases. Buildx saves the build cache before publishing so it
+can be reused if a later push fails; cache eviction may require a full rebuild. Its
 reference is derived from the Dockerfile, upstream commit and patch by
 `scripts/ui-image-reference.sh`. The Swarm orchestrator checks that reference
 before changing the stack and passes registry credentials to Swarm. The deploy
