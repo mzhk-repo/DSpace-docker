@@ -160,7 +160,7 @@ module_email() {
     set_config "mail.server.port" "${DSPACE_MAIL_PORT:-587}" "$TARGET_FILE"
     set_config "mail.server.username" "${DSPACE_MAIL_USERNAME}" "$TARGET_FILE"
     set_config "mail.server.password" "${DSPACE_MAIL_PASSWORD}" "$TARGET_FILE"
-    set_config "mail.extraproperties" "mail.smtp.connectiontimeout=5000, mail.smtp.timeout=5000, mail.smtp.writetimeout=5000, mail.smtp.starttls.enable=true, mail.smtp.auth=true, mail.smtp.auth.mechanisms=PLAIN" "$TARGET_FILE"
+    set_config "mail.extraproperties" "mail.smtp.connectiontimeout=5000, mail.smtp.timeout=5000, mail.smtp.writetimeout=5000, mail.smtp.starttls.enable=true, mail.smtp.auth=true" "$TARGET_FILE"
     set_config "mail.from.address" "${DSPACE_MAIL_FROM:-${DSPACE_MAIL_USERNAME}}" "$TARGET_FILE"
     set_config "mail.feedback.recipient" "${DSPACE_MAIL_FEEDBACK:-${DSPACE_MAIL_ADMIN}}" "$TARGET_FILE"
     set_config "mail.admin" "${DSPACE_MAIL_ADMIN}" "$TARGET_FILE"
@@ -171,7 +171,7 @@ module_email() {
 module_security() {
     echo "🔧 [module] security"
     set_config "user.registration" "false" "$TARGET_FILE"
-    set_config "user.forgot-password" "false" "$TARGET_FILE"
+    set_config "user.forgot-password" "${DSPACE_USER_FORGOT_PASSWORD:-false}" "$TARGET_FILE"
 }
 
 module_languages() {

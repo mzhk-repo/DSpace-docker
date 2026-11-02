@@ -1,12 +1,29 @@
-## 2026-11-02 — DSpace login token and idle timeout
+## 2026-11-02 — Correct SMTP authentication diagnosis
+
+### Context
+- A corrected SMTP probe confirmed both `LOGIN` and `PLAIN` authentication succeed. The earlier `LOGIN` probe supplied an unintended empty response and produced a misleading rejection.
+- The DSpace log records HTTP 403 `Password reset is not allowed!`; the active configuration sets `user.forgot-password = false`.
+
+### Change
+- Removed the forced `PLAIN` mechanism to restore JavaMail's normal mechanism selection.
+- Made local password reset configurable with `DSPACE_USER_FORGOT_PASSWORD` (default `false`) and enabled it in the development environment contract after user approval.
+
+### Verification
+- The SMTP authentication probes were performed over validated STARTTLS from the running DSpace container, without submitting a message.
+- The password reset setting and error were observed in the running DSpace configuration and log.
+- The security module generated `false` by default and `true` when explicitly configured; both encrypted environment contracts passed `verify-env.sh --all`.
+- The dev backend configuration was regenerated and its service restart initiated; the replacement container reports `user.forgot-password = true`.
+
+### Risks
+- Enabling password reset allows local DSpace accounts to request password reset links. Mail delivery has not been verified.
 
 ## 2026-11-02 — Force supported SMTP AUTH mechanism
 
 ### Context
-- SMTP2Graph advertises `AUTH LOGIN PLAIN`, but an isolated AUTH probe showed `LOGIN` is rejected while `PLAIN` succeeds with the configured credentials.
+- Correction: the original `LOGIN` probe was malformed; a subsequent corrected probe succeeded. See the later SMTP authentication diagnosis entry.
 
 ### Change
-- Configured DSpace JavaMail to use SMTP AUTH `PLAIN` explicitly, avoiding selection of the gateway's unsupported `LOGIN` mechanism.
+- Configured DSpace JavaMail to use SMTP AUTH `PLAIN` explicitly, based on the incorrect inference that `LOGIN` was unsupported.
 
 ### Verification
 - DNS resolution, SMTP greeting, STARTTLS certificate/hostname validation, and SMTP AUTH `PLAIN` passed from the running DSpace container; no message was submitted.
@@ -34,6 +51,8 @@
 
 ### Rollback
 - Remove `DSPACE_MAIL_FROM` from `.env.example`, revert the email patcher fallback, and remove the runbook note.
+
+## 2026-11-02 — DSpace login token and idle timeout
 
 ### Changed
 - Set the DSpace login JWT lifetime to 24 hours for all authentication methods.
