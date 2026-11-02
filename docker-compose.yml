@@ -119,6 +119,7 @@ services:
     networks:
       - dspacenet
       - proxy-net
+      - smtp2graph_internal_enc
     logging:
       driver: "json-file"
       options:
