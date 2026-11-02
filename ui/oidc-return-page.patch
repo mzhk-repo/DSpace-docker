@@ -1,0 +1,13 @@
+diff --git a/src/app/shared/log-in/methods/log-in-external-provider/log-in-external-provider.component.ts b/src/app/shared/log-in/methods/log-in-external-provider/log-in-external-provider.component.ts
+--- a/src/app/shared/log-in/methods/log-in-external-provider/log-in-external-provider.component.ts
++++ b/src/app/shared/log-in/methods/log-in-external-provider/log-in-external-provider.component.ts
+@@ -101,6 +101,9 @@ export class LogInExternalProviderComponent implements OnInit {
+       } else if (isEmpty(redirectRoute)) {
+         redirectRoute = '/';
+       }
++      if (this.authMethod.authMethodType.toString().toLowerCase() === 'oidc') {
++        this.authService.setRedirectUrl(redirectRoute);
++      }
+       const externalServerUrl = this.authService.getExternalServerRedirectUrl(
+         this._window.nativeWindow.origin,
+         redirectRoute,

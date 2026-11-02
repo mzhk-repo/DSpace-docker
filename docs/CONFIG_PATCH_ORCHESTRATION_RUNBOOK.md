@@ -299,6 +299,23 @@ logs out after a further 5 minutes. JWT refresh can extend an active session;
 this is not an absolute 24-hour session limit. A longer token lifetime increases
 the time a stolen token may remain usable. The servlet session timeout is separate.
 
+The Angular source patch in `ui/oidc-return-page.patch` saves the current route
+using DSpace's `AuthService` before redirecting to OIDC. `ui/Dockerfile` builds
+the UI from the commit in `ui/UPSTREAM_REF` and fails if the patch no longer
+applies. To upgrade Angular, update that commit, review the patch against the
+new source, build the image and verify OIDC login in dev.
+
+CI builds the image and publishes it to GHCR on dev pushes and releases. Its
+reference is derived from the Dockerfile, upstream commit and patch by
+`scripts/ui-image-reference.sh`. The Swarm orchestrator checks that reference
+before changing the stack and passes registry credentials to Swarm. The deploy
+account must be able to access the GHCR package; for a private package, configure
+registry authentication on the manager through the existing credential process.
+Compose outside the Swarm orchestrator retains its configured upstream image.
+After deployment, verify OIDC return from an item and a search page, including
+query parameters. An upgrade with a changed upstream component requires the
+patch to be updated before CI can build the image.
+
 - `AUTH_METHODS`
 - `OIDC_CLIENT_ID`
 - `OIDC_CLIENT_SECRET`

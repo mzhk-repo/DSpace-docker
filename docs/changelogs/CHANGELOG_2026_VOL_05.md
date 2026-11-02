@@ -52,6 +52,22 @@
 ### Rollback
 - Remove `DSPACE_MAIL_FROM` from `.env.example`, revert the email patcher fallback, and remove the runbook note.
 
+## 2026-11-02 — Persistent Angular OIDC return-page patch
+
+### Changed
+- Added an Angular source patch that saves the current route before OIDC login and a Dockerfile based on a pinned upstream commit.
+- CI builds the patched UI and publishes it to GHCR on dev pushes and releases; Swarm deploys the content-derived image reference after checking registry access.
+- Corrected the deploy gate so operational-only changes skip deployment and other changes permit it.
+- Added a build-time patch applicability check and documented the update procedure.
+
+### Verified
+- The patch applies to the pinned DSpace Angular source.
+- Shell syntax and ShellCheck passed for the image reference and Swarm orchestration scripts; workflow YAML and image substitution were checked.
+- The deploy gate was checked with operational-only, UI, and mixed changes.
+
+### Pending
+- The image has not been built or deployed. GHCR access and a complete OIDC runtime check in dev are required before the patch is accepted.
+
 ## 2026-11-02 — DSpace login token and idle timeout
 
 ### Changed
