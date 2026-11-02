@@ -112,6 +112,7 @@ module_cors() {
 module_auth() {
     echo "🔧 [module] auth"
     set_config "plugin.sequence.org.dspace.authenticate.AuthenticationMethod" "${AUTH_METHODS:-org.dspace.authenticate.OidcAuthentication, org.dspace.authenticate.PasswordAuthentication}" "$TARGET_FILE"
+    set_config "jwt.login.token.expiration" "86400000" "$TARGET_FILE"
 }
 
 module_oidc() {
@@ -160,7 +161,7 @@ module_email() {
     set_config "mail.server.username" "${DSPACE_MAIL_USERNAME}" "$TARGET_FILE"
     set_config "mail.server.password" "${DSPACE_MAIL_PASSWORD}" "$TARGET_FILE"
     set_config "mail.extraproperties" "mail.smtp.connectiontimeout=5000, mail.smtp.timeout=5000, mail.smtp.writetimeout=5000, mail.smtp.starttls.enable=true, mail.smtp.auth=true" "$TARGET_FILE"
-    set_config "mail.from.address" "${DSPACE_MAIL_USERNAME}" "$TARGET_FILE"
+    set_config "mail.from.address" "${DSPACE_MAIL_FROM:-${DSPACE_MAIL_USERNAME}}" "$TARGET_FILE"
     set_config "mail.feedback.recipient" "${DSPACE_MAIL_FEEDBACK:-${DSPACE_MAIL_ADMIN}}" "$TARGET_FILE"
     set_config "mail.admin" "${DSPACE_MAIL_ADMIN}" "$TARGET_FILE"
     set_config "mail.alert.recipient" "${DSPACE_MAIL_ADMIN}" "$TARGET_FILE"
@@ -170,7 +171,7 @@ module_email() {
 module_security() {
     echo "🔧 [module] security"
     set_config "user.registration" "false" "$TARGET_FILE"
-    set_config "user.forgot-password" "false" "$TARGET_FILE"
+    set_config "user.forgot-password" "${DSPACE_USER_FORGOT_PASSWORD:-false}" "$TARGET_FILE"
 }
 
 module_languages() {

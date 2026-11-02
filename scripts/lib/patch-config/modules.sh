@@ -155,6 +155,11 @@ rest:
   nameSpace: ${REST_NAMESPACE}
   ssrBaseUrl: http://dspace:8080/server
 
+auth:
+  ui:
+    timeUntilIdle: 86100000
+    idleGracePeriod: 300000
+
 themes:
   - name: dspace
     headTags:

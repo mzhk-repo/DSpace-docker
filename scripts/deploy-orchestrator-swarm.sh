@@ -322,13 +322,20 @@ deploy_swarm() {
 
   prepare_deploy_state
   validate_runtime_env_file
+  local ui_image
+  ui_image="$(bash "${SCRIPT_DIR}/ui-image-reference.sh")"
+  log "Checking availability of UI image ${ui_image}"
+  if ! docker manifest inspect "${ui_image}" >/dev/null; then
+    log "ERROR: UI image is unavailable; check the GHCR build and registry access"
+    exit 1
+  fi
   run_ansible_secrets_if_configured
   run_versioned_env_secret_renderer
   run_validation_scripts
   run_deploy_adjacent_scripts
 
   log "Rendering Swarm manifest (stack=${STACK_NAME}, env_file=${ENV_FILE})"
-  docker compose --env-file "${ENV_FILE}" \
+  DSPACE_UI_IMAGE="${ui_image}" docker compose --env-file "${ENV_FILE}" \
     -f "${compose_file}" \
     -f "${swarm_file}" \
     config > "${raw_manifest}"
@@ -337,7 +344,7 @@ deploy_swarm() {
 
   if stack_deploy_required "${deploy_manifest}"; then
     log "Deploying stack ${STACK_NAME}"
-    docker stack deploy -c "${deploy_manifest}" "${STACK_NAME}"
+    docker stack deploy --with-registry-auth -c "${deploy_manifest}" "${STACK_NAME}"
     record_stack_deploy_hash
   fi
 

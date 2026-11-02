@@ -5,6 +5,8 @@
 - CI/CD decrypt flow: shared workflow розшифровує `env.dev.enc` або `env.prod.enc` у тимчасовий файл і передає шлях через `ORCHESTRATOR_ENV_FILE`.
 - Autonomous flow: cron/manual скрипти читають `SERVER_ENV` (`dev|prod`) або аргумент `--env dev|prod`, розшифровують `env.<env>.enc` у `/dev/shm` і очищають tmp-файл після завершення.
 - Локальний dev fallback на `.env` дозволений тільки для deploy-adjacent скриптів, коли `ORCHESTRATOR_ENV_FILE` не передано.
+- Для пошти `DSPACE_MAIL_USERNAME` є логіном SMTP AUTH, а `DSPACE_MAIL_FROM` — адресою відправника. `DSPACE_MAIL_FROM` має точно відповідати sender allowlist SMTP relay; якщо не заданий, використовується `DSPACE_MAIL_USERNAME` для сумісності.
+- `DSPACE_USER_FORGOT_PASSWORD=true` enables password reset for local DSpace accounts; the default is `false`. This does not change the external OIDC provider's password policy.
 
 ## Категорія 1а: validation
 

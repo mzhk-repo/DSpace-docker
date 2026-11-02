@@ -110,6 +110,7 @@ services:
         - "traefik.http.services.dspace-api.loadbalancer.server.port=8080"
 
   dspace-angular:
+    image: "${DSPACE_UI_IMAGE:-${DOCKER_REGISTRY:-docker.io}/${DOCKER_OWNER:-dspace}/dspace-angular:${DSPACE_UI_VER:-dspace-9_x-dist}}"
     container_name: !reset null
     restart: !reset null
     depends_on: !reset null

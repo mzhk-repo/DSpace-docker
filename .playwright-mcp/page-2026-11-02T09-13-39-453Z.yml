@@ -1,0 +1,221 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - paragraph [ref=e5]:
+      - text: "We collect and process your personal information for the following purposes:"
+      - strong [ref=e6]: Functional, Statistical
+    - list [ref=e7]:
+      - listitem [ref=e8]:
+        - button "That's ok" [ref=e9] [cursor=pointer]
+      - listitem [ref=e10]:
+        - button "Decline" [ref=e11] [cursor=pointer]
+      - listitem [ref=e12]:
+        - button "Customize" [ref=e13] [cursor=pointer]
+  - generic [ref=e16]:
+    - button "Skip to main content" [ref=e17] [cursor=pointer]
+    - generic [ref=e19]:
+      - banner [ref=e25]:
+        - generic [ref=e26]:
+          - button "Home" [ref=e27] [cursor=pointer]:
+            - img "Repository logo" [ref=e28]
+          - navigation "Main navigation bar" [ref=e29]:
+            - menubar [ref=e32]:
+              - menuitem "Communities & Collections" [ref=e36] [cursor=pointer]
+              - menuitem [ref=e40] [cursor=pointer]:
+                - button "All of DSpace" [ref=e43]
+                - generic [aria-hidden] [ref=e44]: 
+              - menuitem "Statistics" [ref=e48] [cursor=pointer]
+          - generic [ref=e49]:
+            - generic "Search" [ref=e52]:
+              - generic [ref=e54]:
+                - textbox "Search" [ref=e55]:
+                  - /placeholder: ""
+                - button "Submit search" [ref=e56] [cursor=pointer]:
+                  - emphasis [ref=e57]: 
+            - toolbar [ref=e58]:
+              - button "Language switch" [ref=e62] [cursor=pointer]:
+                - generic [ref=e63]: 
+              - generic [ref=e68]:
+                - button "Log In" [ref=e69] [cursor=pointer]
+                - text:  
+      - main [ref=e70]:
+        - generic [ref=e73]:
+          - generic [ref=e76]:
+            - generic [ref=e78]:
+              - generic [ref=e80]:
+                - heading "DSpace 9" [level=1] [ref=e81]
+                - paragraph [ref=e82]:
+                  - generic [ref=e83]: 
+                  - text: This site is running DSpace 9. For more information, see the
+                  - link "DSpace 9 Release Notes" [ref=e84] [cursor=pointer]:
+                    - /url: https://wiki.lyrasis.org/display/DSDOC9x/Release+Notes
+                  - text: .
+                - paragraph [ref=e85]: "DSpace is the world leading open source repository platform that enables organisations to:"
+              - list [ref=e86]:
+                - listitem [ref=e87]: easily ingest documents, audio, video, datasets and their corresponding Dublin Core metadata
+                - listitem [ref=e88]: open up this content to local and global audiences, thanks to the OAI-PMH interface and Google Scholar optimizations
+                - listitem [ref=e89]: issue permanent urls and trustworthy identifiers, including optional integrations with handle.net and DataCite DOI
+              - paragraph [ref=e90]:
+                - text: Join an international community of
+                - link "leading institutions using DSpace" [ref=e91] [cursor=pointer]:
+                  - /url: https://wiki.lyrasis.org/display/DSPACE/DSpace+Positioning
+                - text: .
+              - paragraph [ref=e92]: The test user accounts below have their password set to the name of this software in lowercase.
+              - list [ref=e93]:
+                - listitem [ref=e94]: Demo Site Administrator = dspacedemo+admin@gmail.com
+                - listitem [ref=e95]: Demo Community Administrator = dspacedemo+commadmin@gmail.com
+                - listitem [ref=e96]: Demo Collection Administrator = dspacedemo+colladmin@gmail.com
+                - listitem [ref=e97]: Demo Submitter = dspacedemo+submit@gmail.com
+            - generic [ref=e98]:
+              - text: Photo by
+              - link "@inspiredimages" [ref=e99] [cursor=pointer]:
+                - /url: https://www.pexels.com/@inspiredimages
+          - generic [ref=e100]:
+            - generic [ref=e105]:
+              - textbox "Search the repository ..." [ref=e106]
+              - button " Search" [ref=e107] [cursor=pointer]:
+                - generic [ref=e108]: 
+                - text: Search
+            - generic [ref=e111]:
+              - heading "Communities in DSpace" [level=2] [ref=e112]
+              - paragraph [ref=e113]: Select a community to browse its collections.
+              - generic [ref=e118]:
+                - generic [ref=e120]:
+                  - generic [ref=e121]: Now showing 1 - 5 of 5
+                  - button "Syndication feed" [ref=e124] [cursor=pointer]:
+                    - generic [ref=e125]: 
+                - list [ref=e126]:
+                  - listitem [ref=e127]:
+                    - link "Навчальні" [ref=e131] [cursor=pointer]:
+                      - /url: /communities/6de479f0-4d54-4182-843c-9572946f1dfe
+                  - listitem [ref=e133]:
+                    - link "Наукові" [ref=e137] [cursor=pointer]:
+                      - /url: /communities/0de9be4e-6c07-4808-95cb-39c89926f8b6
+                  - listitem [ref=e139]:
+                    - link "Періодичні" [ref=e143] [cursor=pointer]:
+                      - /url: /communities/d76a081e-3dcb-4cb1-8710-64a5526e359a
+                  - listitem [ref=e145]:
+                    - link "Ретроспективні" [ref=e149] [cursor=pointer]:
+                      - /url: /communities/4fe1f71b-3087-4883-a610-f555fda6cbfe
+                  - listitem [ref=e151]:
+                    - link "Художні" [ref=e155] [cursor=pointer]:
+                      - /url: /communities/6659046b-cde0-4dc5-9fbc-def016bb7e3a
+            - generic [ref=e158]:
+              - heading "Recent Submissions" [level=2] [ref=e160]
+              - list [ref=e161]:
+                - listitem [ref=e162]:
+                  - generic [ref=e167]:
+                    - link [ref=e169] [cursor=pointer]:
+                      - /url: /items/fb80f306-5cf4-4689-ae41-5482dd2395e7
+                      - img "Thumbnail Image" [ref=e173]
+                    - generic [ref=e174]:
+                      - generic [ref=e181]:
+                        - generic [ref=e182]: "Item type:"
+                        - generic [ref=e183]: Item
+                        - generic [ref=e184]: ","
+                      - generic [ref=e186]:
+                        - 'link "Пожарная профилактика. Т.1 Основы и принципы: в изложении применительно к курсу пожарного техникума" [ref=e187] [cursor=pointer]':
+                          - /url: /items/fb80f306-5cf4-4689-ae41-5482dd2395e7
+                        - generic [ref=e190]:
+                          - generic [ref=e191]:
+                            - text: (1931)
+                            - generic [ref=e192]: Эллисон, В.А
+                          - text: 
+                - listitem [ref=e194]:
+                  - generic [ref=e199]:
+                    - link [ref=e201] [cursor=pointer]:
+                      - /url: /items/055ab195-42f1-4385-9d83-52262bf83177
+                      - img "Thumbnail Image" [ref=e205]
+                    - generic [ref=e206]:
+                      - generic [ref=e213]:
+                        - generic [ref=e214]: "Item type:"
+                        - generic [ref=e215]: Item
+                        - generic [ref=e216]: ","
+                      - generic [ref=e218]:
+                        - link "Спринклерное и дренчерное оборудование" [ref=e219] [cursor=pointer]:
+                          - /url: /items/055ab195-42f1-4385-9d83-52262bf83177
+                        - generic [ref=e222]:
+                          - generic [ref=e223]:
+                            - text: (1937)
+                            - generic [ref=e224]: Тейхман, Е.А
+                          - text: 
+                - listitem [ref=e226]:
+                  - generic [ref=e231]:
+                    - link [ref=e233] [cursor=pointer]:
+                      - /url: /items/fd1abd68-6e36-42ad-8d4f-5a86e6d2ddc5
+                      - img "Thumbnail Image" [ref=e237]
+                    - generic [ref=e238]:
+                      - generic [ref=e245]:
+                        - generic [ref=e246]: "Item type:"
+                        - generic [ref=e247]: Item
+                        - generic [ref=e248]: ","
+                      - generic [ref=e250]:
+                        - link "Насосы" [ref=e251] [cursor=pointer]:
+                          - /url: /items/fd1abd68-6e36-42ad-8d4f-5a86e6d2ddc5
+                        - generic [ref=e254]:
+                          - generic [ref=e255]: (1960)
+                          - text: 
+                - listitem [ref=e256]:
+                  - generic [ref=e261]:
+                    - link [ref=e263] [cursor=pointer]:
+                      - /url: /items/9f6e55e6-aa4e-42af-a304-79877a56bfb4
+                      - img "Thumbnail Image" [ref=e267]
+                    - generic [ref=e268]:
+                      - generic [ref=e275]:
+                        - generic [ref=e276]: "Item type:"
+                        - generic [ref=e277]: Item
+                        - generic [ref=e278]: ","
+                      - generic [ref=e280]:
+                        - link "Гидравлика. Гидрология. Гидрометрия. Ч.1" [ref=e281] [cursor=pointer]:
+                          - /url: /items/9f6e55e6-aa4e-42af-a304-79877a56bfb4
+                        - generic [ref=e284]:
+                          - generic [ref=e285]:
+                            - text: (1950)
+                            - generic [ref=e286]:
+                              - generic [ref=e287]: Михайлов, К.А;
+                              - generic [ref=e288]: Богомолов, А.И
+                          - text: 
+                - listitem [ref=e289]:
+                  - generic [ref=e294]:
+                    - link [ref=e296] [cursor=pointer]:
+                      - /url: /items/663b34cc-50b7-4d14-b814-af1b2d4fdbf2
+                      - img "Thumbnail Image" [ref=e300]
+                    - generic [ref=e301]:
+                      - generic [ref=e308]:
+                        - generic [ref=e309]: "Item type:"
+                        - generic [ref=e310]: Item
+                        - generic [ref=e311]: ","
+                      - generic [ref=e313]:
+                        - link "Пожарная сигнализация" [ref=e314] [cursor=pointer]:
+                          - /url: /items/663b34cc-50b7-4d14-b814-af1b2d4fdbf2
+                        - generic [ref=e317]:
+                          - generic [ref=e318]:
+                            - text: (1934)
+                            - generic [ref=e319]:
+                              - generic [ref=e320]: Макаревский, Г.Н;
+                              - generic [ref=e321]: Болтунов, А.В
+                          - text: 
+              - link "Load more ..." [ref=e322] [cursor=pointer]
+      - contentinfo [ref=e325]:
+        - generic [ref=e327]:
+          - paragraph [ref=e328]:
+            - link "DSpace software" [ref=e329] [cursor=pointer]:
+              - /url: http://www.dspace.org/
+            - text: copyright © 2002-2026
+            - link "LYRASIS" [ref=e330] [cursor=pointer]:
+              - /url: https://www.lyrasis.org/
+          - list [ref=e331]:
+            - listitem [ref=e332]:
+              - button "Cookie settings" [ref=e333] [cursor=pointer]
+            - listitem [ref=e334]:
+              - link "Accessibility settings" [ref=e335] [cursor=pointer]:
+                - /url: /info/accessibility
+            - listitem [ref=e336]:
+              - link "Privacy policy" [ref=e337] [cursor=pointer]:
+                - /url: /info/privacy
+            - listitem [ref=e338]:
+              - link "End User Agreement" [ref=e339] [cursor=pointer]:
+                - /url: /info/end-user-agreement
+            - listitem [ref=e340]:
+              - link "Send Feedback" [ref=e341] [cursor=pointer]:
+                - /url: /info/feedback
+    - log [ref=e342]

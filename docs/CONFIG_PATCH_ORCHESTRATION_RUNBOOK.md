@@ -292,6 +292,32 @@ chmod 600 .env
 - `DSPACE_MAIL_FEEDBACK`
 
 ### SSO/OIDC (auth + oidc модулі)
+
+The `auth` module sets the DSpace login JWT lifetime to 24 hours for all login
+methods. The UI configuration warns after 23 hours 55 minutes of inactivity and
+logs out after a further 5 minutes. JWT refresh can extend an active session;
+this is not an absolute 24-hour session limit. A longer token lifetime increases
+the time a stolen token may remain usable. The servlet session timeout is separate.
+
+The Angular source patch in `ui/oidc-return-page.patch` saves the current route
+using DSpace's `AuthService` before redirecting to OIDC. `ui/Dockerfile` builds
+the UI from the commit in `ui/UPSTREAM_REF` and fails if the patch no longer
+applies. To upgrade Angular, update that commit, review the patch against the
+new source, build the image and verify OIDC login in dev.
+
+CI builds the image and publishes it to `ghcr.io/mzhk-repo/dspace-angular` on
+dev pushes and releases. Buildx saves the build cache before publishing so it
+can be reused if a later push fails; cache eviction may require a full rebuild. Its
+reference is derived from the Dockerfile, upstream commit and patch by
+`scripts/ui-image-reference.sh`. The Swarm orchestrator checks that reference
+before changing the stack and passes registry credentials to Swarm. The deploy
+account must be able to access the GHCR package; for a private package, configure
+registry authentication on the manager through the existing credential process.
+Compose outside the Swarm orchestrator retains its configured upstream image.
+After deployment, verify OIDC return from an item and a search page, including
+query parameters. An upgrade with a changed upstream component requires the
+patch to be updated before CI can build the image.
+
 - `AUTH_METHODS`
 - `OIDC_CLIENT_ID`
 - `OIDC_CLIENT_SECRET`
