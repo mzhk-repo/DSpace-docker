@@ -1,5 +1,23 @@
 ## 2026-11-02 — DSpace login token and idle timeout
 
+## 2026-11-02 — Force supported SMTP AUTH mechanism
+
+### Context
+- SMTP2Graph advertises `AUTH LOGIN PLAIN`, but an isolated AUTH probe showed `LOGIN` is rejected while `PLAIN` succeeds with the configured credentials.
+
+### Change
+- Configured DSpace JavaMail to use SMTP AUTH `PLAIN` explicitly, avoiding selection of the gateway's unsupported `LOGIN` mechanism.
+
+### Verification
+- DNS resolution, SMTP greeting, STARTTLS certificate/hostname validation, and SMTP AUTH `PLAIN` passed from the running DSpace container; no message was submitted.
+- `bash -n scripts/lib/patch-local/modules.sh` and `git diff --check` passed.
+
+### Risks
+- The new setting is not active in the running DSpace service until its config is regenerated and the service restarted. No runtime config or service was changed.
+
+### Rollback
+- Remove `mail.smtp.auth.mechanisms=PLAIN` from `mail.extraproperties`.
+
 ## 2026-11-02 — Separate SMTP login and sender address
 
 ### Changed
