@@ -1,5 +1,22 @@
 ## 2026-11-02 — DSpace login token and idle timeout
 
+## 2026-11-02 — Separate SMTP login and sender address
+
+### Changed
+- Added `DSPACE_MAIL_FROM` for the DSpace sender address, separate from SMTP AUTH username. It defaults to `DSPACE_MAIL_USERNAME` for compatibility and should match the relay sender allowlist.
+- Added the gateway's configured sender address to both encrypted environment contracts.
+- Documented the SMTP env variable roles in the scripts runbook.
+
+### Verification
+- `bash -n scripts/lib/patch-local/modules.sh` and `git diff --check` passed.
+- Runtime mail delivery was not performed.
+
+### Risks
+- Runtime mail delivery still requires verification in dev; production was not deployed or changed at runtime.
+
+### Rollback
+- Remove `DSPACE_MAIL_FROM` from `.env.example`, revert the email patcher fallback, and remove the runbook note.
+
 ### Changed
 - Set the DSpace login JWT lifetime to 24 hours for all authentication methods.
 - Configure the UI idle warning after 23 hours 55 minutes and logout after a further 5 minutes. Active sessions may refresh their JWT.
