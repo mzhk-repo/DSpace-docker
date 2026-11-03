@@ -25,6 +25,7 @@ backup_assetstore() {
 
     if rsync \
         --archive \
+        --no-group \
         --checksum \
         --delete \
         --backup \

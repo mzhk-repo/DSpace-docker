@@ -177,6 +177,14 @@ emit_restore_metrics() {
     return 0
   }
 
+  if [[ "$restore_status" == "0" ]]; then
+    local previous_metrics previous_success
+    previous_metrics="$(docker run --rm -v "$NODE_EXPORTER_TEXTFILE_DIR:/metrics" \
+      alpine:3.20 cat "/metrics/$RESTORE_SMOKE_METRICS_FILE" 2>/dev/null || true)"
+    previous_success="$(printf '%s\n' "$previous_metrics" | awk -v metric="dspace_restore_smoke_last_success_timestamp_seconds{env=\"$RESTORE_SMOKE_ENV_LABEL\",service=\"$RESTORE_SMOKE_SERVICE_LABEL\"}" '$1 == metric && $2 ~ /^[0-9]+$/ { print $2; exit }')"
+    success_timestamp="${previous_success:-0}"
+  fi
+
   local metrics_payload
   metrics_payload="$(cat <<EOF
 # HELP dspace_restore_smoke_last_run_timestamp_seconds Unix timestamp of the last DSpace restore smoke test attempt.
@@ -242,7 +250,7 @@ docker run -d --name "$container_name" \
 
 max_attempts=$((RESTORE_SMOKE_TIMEOUT_SECONDS / 2))
 for attempt in $(seq 1 "$max_attempts"); do
-  if docker exec "$container_name" pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
+  if docker exec "$container_name" psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c 'SELECT 1' >/dev/null 2>&1; then
     break
   fi
   if [[ "$attempt" -eq "$max_attempts" ]]; then
