@@ -1,3 +1,21 @@
+## 2026-11-03 — Skip deployment for operational scripts
+
+### Changed
+- Added the requested operational scripts to the CI deploy gate's skip list. CI continues to run; deployment remains enabled when a service manifest, configuration, or other deploy relevant file changes.
+
+### Verification
+- Deploy gate decisions were checked for operational-only, service configuration, and mixed changes.
+
+## 2026-11-03 — Restore smoke readiness and success timestamp
+
+### Changed
+- Wait for a successful SQL query against the target database before importing the dump.
+- Preserve the previous success timestamp for the same metric labels when a restore smoke test fails.
+
+### Verification
+- Bash syntax, ShellCheck, and isolated success/failure metric checks passed.
+- A real restore smoke test and production deployment were not performed; the reported startup race remains unconfirmed.
+
 ## 2026-11-02 — Resolve Angular image Hadolint findings
 
 ### Changed
