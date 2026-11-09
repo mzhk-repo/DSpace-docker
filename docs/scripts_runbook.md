@@ -173,6 +173,7 @@ ORCHESTRATOR_ENV_FILE=/dev/shm/dspace-env bash scripts/patch-config.yml.sh --lis
 #### Бізнес-логіка
 - Забезпечує `dspace/config/submission-forms.xml`.
 - Додає українську мову до `common_iso_languages`, якщо її ще немає.
+- For `DSPACE_REST_VER=dspace-10.*`, adds missing `owner` and `datasetStep` forms from the versioned DSpace 10.1 additions file, preserving existing forms. A backend restart is required to load a changed bind-mounted file.
 - Ставить backend restart flag, якщо файл створено або змінено.
 
 #### Manual execution

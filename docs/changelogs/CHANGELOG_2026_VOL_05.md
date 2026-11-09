@@ -1,3 +1,14 @@
+## 2026-11-09 — Restore missing DSpace 10 submission forms
+
+### Changed
+- Added the upstream DSpace 10.1 `owner` and `datasetStep` forms to a versioned additions file and taught the submission form patcher to add only missing forms for DSpace 10.x.
+
+### Verification
+- The dev backend returned HTTP 400 for `discover/browses` and logged `Missing the owner form`. An isolated DSpace 10.1 instance returned HTTP 400 with the existing forms, then HTTP 200 after both missing forms were added.
+- The isolated patcher check covered DSpace 9, both forms, repeat execution and the restart flag. The patch has not been applied to the dev service. The separate missing admin sidebar issue remains under investigation.
+- For the affected user, database membership in `Administrator` was present; the operator observed an authenticated OIDC session and one `administratorOf` authorization. The admin sidebar element was absent. A reported CSP message was report-only and does not establish a blocking cause.
+- DSpace Angular 10.1 initializes persistent menu providers together; the browse provider waits for a successful `discover/browses` response. Its HTTP 400 is a plausible cause of the missing sidebar, pending verification after applying the forms fix to dev.
+
 ## 2026-11-09 — Deploy DSpace 10.1 to dev
 
 ### Verification
