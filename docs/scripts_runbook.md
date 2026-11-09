@@ -103,6 +103,15 @@ bash scripts/upgrade-dspace-10.1-swarm.sh --env dev --maintenance-confirmed --re
 
    The UI image must be published for the exact checked-out revision. If the production repository lives elsewhere, `cd` to its actual path. If any preflight check fails, stop and inspect the stated mismatch; do not bypass it.
 
+   A `TLS handshake timeout` during manifest inspection is a registry connectivity failure and does not establish that the image is missing. Check DNS and HTTPS from the production manager:
+
+   ```bash
+   getent ahosts ghcr.io | head -4
+   curl -sS -o /dev/null --connect-timeout 10 --max-time 20 -w 'HTTP %{http_code}\n' https://ghcr.io/v2/
+   ```
+
+   HTTP 401 from `/v2/` confirms an HTTPS response from the registry; it does not prove that the image manifest or its blobs can be fetched. Check registry access from Docker as well. The orchestrator checks the manifest again after migration, so resolve intermittent connectivity before starting the upgrade.
+
 4. Run the preflight first. It creates and removes temporary containers to inspect image files, but does not change services, the database, Solr data or the upgrade marker. It cannot verify the backup contents or the deployment freeze:
 
    ```bash

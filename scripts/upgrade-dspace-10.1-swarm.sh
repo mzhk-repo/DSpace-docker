@@ -87,7 +87,7 @@ backend_image="${registry}/${owner}/dspace:dspace-10.1"
 solr_image="${registry}/${owner}/dspace-solr:dspace-10.1"
 ui_image="$(bash "${SCRIPT_DIR}/ui-image-reference.sh")"
 for img in "$backend_image" "$solr_image"; do docker image inspect "$img" >/dev/null || die "Image is not available locally: $img"; done
-docker manifest inspect "$ui_image" >/dev/null || die "UI image is not available in the registry: $ui_image"
+docker manifest inspect "$ui_image" >/dev/null || die "Could not inspect UI image in the registry: $ui_image; check the error above, network and registry access"
 network="$(docker service inspect "$db" --format '{{range .Spec.TaskTemplate.Networks}}{{.Target}}{{end}}')"
 [[ -n "$network" ]] || die 'Database network not found'
 app_secret="$(docker service inspect "$backend" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{if eq .File.Name "app_env_payload"}}{{.SecretName}}{{end}}{{end}}')"

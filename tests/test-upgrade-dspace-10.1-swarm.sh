@@ -70,7 +70,7 @@ case "$1 $2" in
   'inspect task1') [[ "${TEST_FAILURE:-}" == migration ]] && echo failed || echo complete ;;
   'inspect '*) echo true ;;
   'image inspect') : ;;
-  'manifest inspect') [[ "${TEST_FAILURE:-}" != preflight ]] ;;
+  'manifest inspect') if [[ "${TEST_FAILURE:-}" == preflight ]]; then echo 'simulated TLS handshake timeout' >&2; exit 1; fi ;;
   'create old-image'|'create dspace/dspace-solr:dspace-9_x') echo old-container ;;
   'create '*) echo new-container ;;
   'cp old-container:'*) cp "$TEST_DIR/solr/search/conf/schema.xml" "$3" ;;
@@ -92,7 +92,9 @@ esac
 SH
 chmod +x "$TEST_DIR/bin/"*
 export PATH="$TEST_DIR/bin:$PATH"
-if TEST_FAILURE=preflight bash "$TEST_DIR/project/scripts/upgrade-dspace-10.1-swarm.sh" --env dev --maintenance-confirmed > /dev/null 2>&1; then exit 1; fi
+if TEST_FAILURE=preflight bash "$TEST_DIR/project/scripts/upgrade-dspace-10.1-swarm.sh" --env dev --maintenance-confirmed > /dev/null 2> "$TEST_DIR/preflight-error"; then exit 1; fi
+rg -q 'simulated TLS handshake timeout' "$TEST_DIR/preflight-error"
+rg -q 'Could not inspect UI image' "$TEST_DIR/preflight-error"
 [[ ! -e "$TEST_DIR/backend-stopped" && ! -e "$TEST_DIR/project/.orchestrator-state" ]]
 touch "$TEST_DIR/solr-delayed"
 bash "$TEST_DIR/project/scripts/upgrade-dspace-10.1-swarm.sh" --env dev --maintenance-confirmed > "$TEST_DIR/output"

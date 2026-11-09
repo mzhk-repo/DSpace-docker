@@ -1,3 +1,12 @@
+## 2026-11-09 — Clarify GHCR connectivity failures
+
+### Changed
+- Clarified registry inspection errors in the upgrade script and added targeted production DNS and HTTPS diagnostics to the runbook.
+
+### Verification
+- The operator reported a TLS handshake timeout against GHCR during production preflight. GitHub's package page lists the expected UI image tag. Production network and registry access remain to be diagnosed.
+- Mocked preflight failure preserved the underlying TLS diagnostic and stopped before service changes; ShellCheck and shell syntax passed.
+
 ## 2026-11-09 — Prepare DSpace 10.1 production upgrade
 
 ### Changed
