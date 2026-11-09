@@ -41,11 +41,11 @@ bash scripts/smoke-test.sh --env dev --modules context,required_checks
 
 ### `scripts/upgrade-dspace-10.1-swarm.sh`
 
-One-time **development** upgrade from DSpace 9 to 10.1 with PostgreSQL 15. Run on the manager that hosts the existing stack. The operator must stop all external writers and prevent concurrent CI/CD deployments until the upgrade and checks finish. Confirm a coordinated, restorable database, assetstore, Solr and configuration backup first; this script does not create one.
+One-time **development or production** upgrade from DSpace 9 to 10.1 with PostgreSQL 15. Run on the manager that hosts the selected stack. The operator must stop all external writers and prevent concurrent CI/CD deployments until the upgrade and checks finish. The operator reported that backups are complete; the script does not create or validate them. The recovery point must cover the database, assetstore, Solr and configuration together.
 
-The script validates the dev version contract, existing local services, mounts, image availability, and the existing search schema against the running Solr image. It stops UI and backend, stops Solr, saves `search/conf/schema.xml.before-dspace-10.1`, installs the 10.1 schema with passwordless `sudo`, and starts Solr 10.1. It then runs `database info`, one `database migrate ignored`, another `database info`, and `index-discovery -b` in a one-shot Swarm job using the backend's existing secrets, configuration and read-only assetstore. Finally it calls the dev Swarm orchestrator. The UI image must already be published and accessible to the registry check; the backend and Solr 10.1 images must already exist locally.
+The script validates the selected environment's version contract, secret name bases, database name and user, PostgreSQL, Solr and assetstore mounts, local services, image availability, and the existing search schema against the running Solr image. It stops UI and backend, stops Solr, saves `search/conf/schema.xml.before-dspace-10.1`, installs the 10.1 schema with passwordless `sudo`, and starts Solr 10.1. It then runs `database info`, one `database migrate ignored`, another `database info`, and `index-discovery -b` in a one-shot Swarm job using the backend's existing secrets, configuration and read-only assetstore. Finally it calls the selected environment's Swarm orchestrator, which performs the deployment directly. The UI image must already be published and accessible to the registry check; the backend and Solr 10.1 images must already exist locally.
 
-Do not push the current branch until the upgrade is complete: its unpushed UI changes can trigger a dev deploy immediately. Coordinate a deployment freeze and wait until running or queued deployments finish. For example, from an authenticated GitHub CLI:
+Coordinate a deployment freeze and wait until running or queued deployments finish. A push to `dev` with deployment-relevant changes can trigger a dev deploy immediately. For example, from an authenticated GitHub CLI:
 
 ```bash
 gh run list --workflow main.yml --status in_progress
@@ -73,13 +73,57 @@ bash scripts/upgrade-dspace-10.1-swarm.sh --env dev --maintenance-confirmed
 
 `--maintenance-confirmed` asserts that the backup is verified, external writers are stopped, and no deploy is running or can start concurrently. The script does not independently verify those conditions. It requires passwordless `sudo` for the schema backup and replacement; it does not pass credentials to `sudo`. A changed schema that differs semantically from the current image causes a stop for manual review. The script supports only the existing single-replica services on the local manager and refuses a previous attempt recorded in `.orchestrator-state/<stack>.upgrade-dspace-10.1/`.
 
-On failure or interruption it attempts to stop backend and UI. Inspect the error, marker `status`, the migration job and service logs before recovery; the job may still be running after a timeout. Do not remove the marker or repeat migration blindly. Restoring the old image alone cannot undo a database migration; coordinated restore requires a separate operator decision. Verify backend/UI health, `database info`, search, PDFs, statistics, OAI and KDV end-to-end before resuming writers and ending the deployment freeze. The script and full recovery procedure have not yet been exercised against an existing Swarm stack.
+On failure or interruption it attempts to stop backend and UI. Inspect the error, marker `status`, the migration job and service logs before recovery; the job may still be running after a timeout. Do not remove the marker or repeat migration blindly. Restoring the old image alone cannot undo a database migration; coordinated restore requires a separate operator decision. Verify backend/UI health, `database info`, search, PDFs, statistics, OAI and KDV end-to-end before resuming writers and ending the deployment freeze. The production path and full recovery procedure have not been exercised against a production Swarm stack.
 
 If the script stopped before replacing the schema and before creating the migration job, `--resume-stopped` can continue the same attempt. It requires marker status `started`, stopped UI, backend and Solr, the original schema without a schema backup, and no migration job. It refuses later or ambiguous states:
 
 ```bash
 bash scripts/upgrade-dspace-10.1-swarm.sh --env dev --maintenance-confirmed --resume-stopped
 ```
+
+#### Production procedure
+
+1. On the production manager, use the actual repository path if it differs from `/opt/Dspace/DSpace-docker`. Confirm the reviewed repository revision contains this script and the DSpace 10.1 submission form additions. Check `git status --short --branch` before updating the checkout and preserve local changes. Do not publish a GitHub release or allow another deployment during the upgrade: a published `v*` release triggers the production deploy workflow independently of this script.
+2. Update the encrypted production contract using SOPS, setting **only** `DSPACE_REST_VER=dspace-10.1` and `DSPACE_SOLR_VER=dspace-10.1`; retain PostgreSQL 15 and other production values. The production contract previously contained 9.x tags. This is a separate operator action: the script does not modify `env.prod.enc`. Preserve the updated encrypted contract in the reviewed release revision so later CI deployments use the same versions. Pushing a change can trigger the dev workflow; inspect the changes and its deployment gate first.
+
+   ```bash
+   cd /opt/Dspace/DSpace-docker
+   sops --input-type dotenv --output-type dotenv env.prod.enc
+   bash scripts/verify-env.sh --env prod
+   ```
+
+3. Stop external writers, including Integrator jobs, and arrange the deployment freeze. On the **production manager**, with the confirmed backups available and no concurrent deployment, pull the two official images and check the patched UI manifest:
+
+   ```bash
+   cd /opt/Dspace/DSpace-docker
+   docker pull dspace/dspace:dspace-10.1
+   docker pull dspace/dspace-solr:dspace-10.1
+   docker manifest inspect "$(bash scripts/ui-image-reference.sh)" >/dev/null
+   ```
+
+   The UI image must be published for the exact checked-out revision. If the production repository lives elsewhere, `cd` to its actual path. If any preflight check fails, stop and inspect the stated mismatch; do not bypass it.
+
+4. Run the preflight first. It creates and removes temporary containers to inspect image files, but does not change services, the database, Solr data or the upgrade marker. It cannot verify the backup contents or the deployment freeze:
+
+   ```bash
+   bash scripts/upgrade-dspace-10.1-swarm.sh --env prod --maintenance-confirmed --production-confirmed --preflight-only
+   ```
+
+   After `Preflight passed for prod`, start the production upgrade. This command changes the running production stack and migrates its database:
+
+   ```bash
+   bash scripts/upgrade-dspace-10.1-swarm.sh --env prod --maintenance-confirmed --production-confirmed
+   ```
+
+   For the narrowly defined pre-migration stopped state described above, use `--resume-stopped` after the other flags. For any later state, inspect the marker and migration job; do not repeat automatically.
+5. Run the production smoke test and check the acceptance scenarios before resuming writers:
+
+   ```bash
+   bash scripts/smoke-test.sh --env prod --modules context,required_checks
+   docker service ls --filter name=dspace_
+   ```
+
+   Also check migration status, search and PDF access, OAI, statistics, OIDC and a controlled Integrator workflow. A `1/1` replica count alone is not acceptance. After successful checks, publish the reviewed release revision through the normal process if a release is required; publishing it runs the production workflow again. Ensure that the release contains the updated encrypted contract.
 
 ### `scripts/deploy-orchestrator-swarm.sh`
 
