@@ -1,3 +1,19 @@
+## 2026-11-09 — Plan DSpace 10.1 dev upgrade
+
+### Changed
+- Added a staged DSpace 10.1 and PostgreSQL 17 DHI implementation plan, including backup, rollback, and KDV Integrator acceptance.
+- Pinned the custom Angular build to the DSpace 10.1 release commit; removed the unused `DSPACE_VERSION` key from the environment contract.
+
+### Verification
+- Confirmed the 10.1 backend, Solr, and Angular tags in Docker Hub's catalog and identified the Angular release commit from GitHub.
+- The existing OIDC patch applies to the 10.1 source; the dev environment contract validates and the three upstream image manifests are available.
+- The custom Angular 10.1 Docker image built locally. npm reported 82 dependency vulnerabilities during the build; their applicability to the final image has not been assessed.
+- The 10.1 search schema differs from 9.x, while the current Solr entrypoint preserves existing core configuration. Existing Solr data and configuration require an isolated upgrade rehearsal before deployment.
+- The operator reported a successful PostgreSQL 15 restore smoke from the 2026-11-09 dev metadata backup (63 tables). An isolated restore of that SQL dump completed DSpace 10.1 `database migrate ignored`; `database info` showed the 10.0 migrations succeeded. A clean Solr 10.1 search core started separately.
+- An isolated online copy of the existing Solr cores started under 10.1; replacing the search schema and reloading preserved counts (search 305, statistics 380, authority 0). A synthetic document was indexed and found using the new `itemauthoritylookup` field. This does not verify a consistent backup or full DSpace reindex.
+- A separate isolated rehearsal restored the SQL dump, migrated the database, and completed `index-discovery -b`. Search document count changed from 305 to 465 and statistics remained 380; the SQL and Solr copies were not a coordinated snapshot and no assetstore was mounted, so search correctness and full-text indexing remain unverified.
+- UI publication, deployment, and live integration acceptance were not performed.
+
 ## 2026-11-03 — Skip deployment for operational scripts
 
 ### Changed
