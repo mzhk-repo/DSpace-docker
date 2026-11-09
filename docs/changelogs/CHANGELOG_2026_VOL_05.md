@@ -1,3 +1,36 @@
+## 2026-11-09 — Wait for stopped Swarm tasks during DSpace upgrade
+
+### Changed
+- Wait up to 90 seconds for each local container to stop after scaling the service to zero. Allow a guarded resume only before the search schema replacement and migration job.
+
+### Verification
+- The operator's attempt stopped after scaling Solr to zero, before creating the schema backup or migration job. The services were subsequently observed at zero replicas and the marker remained `started`.
+- Mocked checks covered delayed Solr shutdown and the guarded resume; shell syntax and ShellCheck passed. A complete upgrade remains unverified.
+
+## 2026-11-09 — Prepare automated DSpace 10.1 Swarm upgrade
+
+### Changed
+- Added a dev-only one-time Swarm upgrade script and operational runbook, including schema backup, a migration job, Discovery indexing and failure handling. Marked the operational script as deployment-neutral in the CI gate.
+
+### Verification
+- Shell syntax, ShellCheck and mocked preflight, success, retry, Solr failure and migration failure checks passed. A disposable Swarm job completed. The current search schema matched the existing image after XML whitespace normalization. The complete upgrade and recovery have not been exercised on a Swarm stack; runtime acceptance is pending.
+
+## 2026-11-09 — Exercise KDV client against isolated DSpace 10.1
+
+### Verification
+- On a fresh isolated PostgreSQL 15 database, DSpace 10.1 `database migrate ignored` completed and `database info` showed successful 10.0 migrations.
+- The actual KDV client passed authentication, item creation and metadata update, UID and handle lookup, PDF upload/download and checksum, primary bitstream creation/replacement, and deletion of the old bitstream against isolated DSpace 10.1 and Solr 10.1.
+- Upgrade from coordinated data, full Integrator and Koha processing, duplicate handling, error paths and link repair remain unverified.
+
+## 2026-11-09 — Prepare migration and compatibility rehearsal
+
+### Changed
+- Documented the ordering and stop conditions for an isolated DSpace 10.1 database migration and existing Solr search schema upgrade, and the KDV REST acceptance scenarios.
+
+### Verification
+- Reviewed the startup and Swarm deploy paths and DSpace 10.1 source tests for selected REST operations. KDV DSpace contract tests passed (22 tests); these use mocked responses.
+- The complete procedure, live DSpace 10.1 REST compatibility, and an upgrade from a coordinated backup remain unverified. No deployment was performed.
+
 ## 2026-11-09 — Plan DSpace 10.1 dev upgrade
 
 ### Changed
