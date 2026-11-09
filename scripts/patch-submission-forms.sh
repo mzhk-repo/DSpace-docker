@@ -104,6 +104,47 @@ else
     CONFIG_CHANGED="true"
 fi
 
+if [[ "$(read_env_var DSPACE_REST_VER "$ENV_FILE")" == dspace-10.* ]]; then
+    forms_result="$(python3 - "$TARGET_FILE" "$CONFIG_DIR/submission-forms-10.1-additions.xml" <<'PY'
+import os
+import pathlib
+import tempfile
+import xml.etree.ElementTree as ET
+import sys
+
+path = pathlib.Path(sys.argv[1])
+content = path.read_text(encoding="utf-8")
+root = ET.fromstring(content)
+additions = ET.parse(sys.argv[2]).getroot()
+missing = [form for form in additions.findall('form')
+           if root.find(f'./form-definitions/form[@name="{form.get("name")}"]') is None]
+if not missing:
+    print("unchanged")
+else:
+    closing = "    </form-definitions>"
+    if content.count(closing) != 1:
+        raise SystemExit("Expected exactly one form-definitions closing tag")
+    forms = ''.join('    ' + ET.tostring(form, encoding='unicode') for form in missing)
+    updated = content.replace(closing, forms + closing, 1)
+    ET.fromstring(updated)
+    fd, temporary = tempfile.mkstemp(prefix=".submission-forms-", dir=path.parent)
+    try:
+        os.fchmod(fd, path.stat().st_mode & 0o7777)
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(updated)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+    print("changed")
+PY
+)"
+    if [[ "$forms_result" == changed ]]; then
+        echo "Added missing DSpace 10 submission forms."
+        CONFIG_CHANGED="true"
+    fi
+fi
+
 if [[ "$CONFIG_CHANGED" == "true" ]]; then
     mark_backend_restart_required
 fi

@@ -39,6 +39,48 @@ bash scripts/smoke-test.sh --env dev --modules context,required_checks
 
 ## Категорія 1б: deploy-adjacent
 
+### `scripts/upgrade-dspace-10.1-swarm.sh`
+
+One-time **development** upgrade from DSpace 9 to 10.1 with PostgreSQL 15. Run on the manager that hosts the existing stack. The operator must stop all external writers and prevent concurrent CI/CD deployments until the upgrade and checks finish. Confirm a coordinated, restorable database, assetstore, Solr and configuration backup first; this script does not create one.
+
+The script validates the dev version contract, existing local services, mounts, image availability, and the existing search schema against the running Solr image. It stops UI and backend, stops Solr, saves `search/conf/schema.xml.before-dspace-10.1`, installs the 10.1 schema with passwordless `sudo`, and starts Solr 10.1. It then runs `database info`, one `database migrate ignored`, another `database info`, and `index-discovery -b` in a one-shot Swarm job using the backend's existing secrets, configuration and read-only assetstore. Finally it calls the dev Swarm orchestrator. The UI image must already be published and accessible to the registry check; the backend and Solr 10.1 images must already exist locally.
+
+Do not push the current branch until the upgrade is complete: its unpushed UI changes can trigger a dev deploy immediately. Coordinate a deployment freeze and wait until running or queued deployments finish. For example, from an authenticated GitHub CLI:
+
+```bash
+gh run list --workflow main.yml --status in_progress
+gh run list --workflow main.yml --status queued
+```
+
+After confirming no deployment is running or queued, publish the UI image without pushing the branch. These commands require Docker access and existing GHCR login credentials for the repository owner:
+
+```bash
+cd /opt/Dspace/DSpace-docker
+ui_image="$(bash scripts/ui-image-reference.sh)"
+docker build -t "$ui_image" -f ui/Dockerfile ui
+docker push "$ui_image"
+```
+
+Then, on the dev manager:
+
+```bash
+cd /opt/Dspace/DSpace-docker
+docker pull dspace/dspace:dspace-10.1
+docker pull dspace/dspace-solr:dspace-10.1
+docker manifest inspect "$(bash scripts/ui-image-reference.sh)" >/dev/null
+bash scripts/upgrade-dspace-10.1-swarm.sh --env dev --maintenance-confirmed
+```
+
+`--maintenance-confirmed` asserts that the backup is verified, external writers are stopped, and no deploy is running or can start concurrently. The script does not independently verify those conditions. It requires passwordless `sudo` for the schema backup and replacement; it does not pass credentials to `sudo`. A changed schema that differs semantically from the current image causes a stop for manual review. The script supports only the existing single-replica services on the local manager and refuses a previous attempt recorded in `.orchestrator-state/<stack>.upgrade-dspace-10.1/`.
+
+On failure or interruption it attempts to stop backend and UI. Inspect the error, marker `status`, the migration job and service logs before recovery; the job may still be running after a timeout. Do not remove the marker or repeat migration blindly. Restoring the old image alone cannot undo a database migration; coordinated restore requires a separate operator decision. Verify backend/UI health, `database info`, search, PDFs, statistics, OAI and KDV end-to-end before resuming writers and ending the deployment freeze. The script and full recovery procedure have not yet been exercised against an existing Swarm stack.
+
+If the script stopped before replacing the schema and before creating the migration job, `--resume-stopped` can continue the same attempt. It requires marker status `started`, stopped UI, backend and Solr, the original schema without a schema backup, and no migration job. It refuses later or ambiguous states:
+
+```bash
+bash scripts/upgrade-dspace-10.1-swarm.sh --env dev --maintenance-confirmed --resume-stopped
+```
+
 ### `scripts/deploy-orchestrator-swarm.sh`
 
 #### Бізнес-логіка
@@ -131,6 +173,7 @@ ORCHESTRATOR_ENV_FILE=/dev/shm/dspace-env bash scripts/patch-config.yml.sh --lis
 #### Бізнес-логіка
 - Забезпечує `dspace/config/submission-forms.xml`.
 - Додає українську мову до `common_iso_languages`, якщо її ще немає.
+- For `DSPACE_REST_VER=dspace-10.*`, adds missing `owner` and `datasetStep` forms from the versioned DSpace 10.1 additions file, preserving existing forms. A backend restart is required to load a changed bind-mounted file.
 - Ставить backend restart flag, якщо файл створено або змінено.
 
 #### Manual execution

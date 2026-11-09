@@ -69,6 +69,8 @@ jobs:
               scripts/run-maintenance.sh|\
               scripts/sync-user-groups.sh|\
               scripts/test-restore.sh|\
+              scripts/upgrade-dspace-10.1-swarm.sh|\
+              tests/test-upgrade-dspace-10.1-swarm.sh|\
               docs/**)
                 ;;
               *)

@@ -145,8 +145,8 @@ DR-процедура і DoD описані в `RunbookDR.md`.
 ## 10) Правила ведення змін
 
 1. `CHANGELOG.md` це тільки індекс томів і статус активного тому.
-2. Детальні записи ведуться у `CHANGELOGS/CHANGELOG_<YEAR>_VOL_<NN>.md`.
-3. Ліміт тому: soft `300` рядків, hard `350` рядків.
+2. Детальні записи ведуться у `docs/changelogs/CHANGELOG_<YEAR>_VOL_<NN>.md`.
+3. Ліміт тому: soft `900` рядків, hard `950` рядків.
 4. Кожен суттєвий крок має бути зафіксований у активному томі.
 
 ## 11) Структура репозиторію (актуальна)
@@ -177,7 +177,7 @@ DSpace-docker/
   ARCHITECTURE.md
   NEW_CHAT_START_HERE.md
   CHANGELOG.md
-  CHANGELOGS/
+  docs/changelogs/
   RunbookDR.md
   Traefik-logrotate.md
   archive/ (історичні/неактивні файли, не частина runtime-пайплайну)

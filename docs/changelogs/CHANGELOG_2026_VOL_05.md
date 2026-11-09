@@ -1,3 +1,71 @@
+## 2026-11-09 — Restore missing DSpace 10 submission forms
+
+### Changed
+- Added the upstream DSpace 10.1 `owner` and `datasetStep` forms to a versioned additions file and taught the submission form patcher to add only missing forms for DSpace 10.x.
+
+### Verification
+- The dev backend returned HTTP 400 for `discover/browses` and logged `Missing the owner form`. An isolated DSpace 10.1 instance returned HTTP 400 with the existing forms, then HTTP 200 after both missing forms were added.
+- The isolated patcher check covered DSpace 9, both forms, repeat execution and the restart flag. The patch has not been applied to the dev service. The separate missing admin sidebar issue remains under investigation.
+- For the affected user, database membership in `Administrator` was present; the operator observed an authenticated OIDC session and one `administratorOf` authorization. The admin sidebar element was absent. A reported CSP message was report-only and does not establish a blocking cause.
+- DSpace Angular 10.1 initializes persistent menu providers together; the browse provider waits for a successful `discover/browses` response. Its HTTP 400 is a plausible cause of the missing sidebar, pending verification after applying the forms fix to dev.
+
+## 2026-11-09 — Deploy DSpace 10.1 to dev
+
+### Verification
+- The operator reported the upgrade deployment completed; its local marker reads `deploy-complete`. Swarm reports 1/1 for DSpace 10.1 backend and Solr, the patched Angular image and PostgreSQL 15; their running containers report healthy.
+- `database info` showed successful DSpace 10.0 migrations and two older migrations marked Out of Order. All six expected Solr cores reported no initialization failures; search contained 465 documents, statistics 384 and authority 0.
+- Required dev smoke checks returned HTTP 200 for UI, REST core/sites and OAI Identify. Solr startup logged a StatusLogger reconfiguration error; its operational effect has not been established.
+- Search correctness, PDF access, OIDC, mail delivery and end-to-end KDV/Koha acceptance remain to be verified.
+
+## 2026-11-09 — Wait for stopped Swarm tasks during DSpace upgrade
+
+### Changed
+- Wait up to 90 seconds for each local container to stop after scaling the service to zero. Allow a guarded resume only before the search schema replacement and migration job.
+
+### Verification
+- The operator's attempt stopped after scaling Solr to zero, before creating the schema backup or migration job. The services were subsequently observed at zero replicas and the marker remained `started`.
+- Mocked checks covered delayed Solr shutdown and the guarded resume; shell syntax and ShellCheck passed. A complete upgrade remains unverified.
+
+## 2026-11-09 — Prepare automated DSpace 10.1 Swarm upgrade
+
+### Changed
+- Added a dev-only one-time Swarm upgrade script and operational runbook, including schema backup, a migration job, Discovery indexing and failure handling. Marked the operational script as deployment-neutral in the CI gate.
+
+### Verification
+- Shell syntax, ShellCheck and mocked preflight, success, retry, Solr failure and migration failure checks passed. A disposable Swarm job completed. The current search schema matched the existing image after XML whitespace normalization. The complete upgrade and recovery have not been exercised on a Swarm stack; runtime acceptance is pending.
+
+## 2026-11-09 — Exercise KDV client against isolated DSpace 10.1
+
+### Verification
+- On a fresh isolated PostgreSQL 15 database, DSpace 10.1 `database migrate ignored` completed and `database info` showed successful 10.0 migrations.
+- The actual KDV client passed authentication, item creation and metadata update, UID and handle lookup, PDF upload/download and checksum, primary bitstream creation/replacement, and deletion of the old bitstream against isolated DSpace 10.1 and Solr 10.1.
+- Upgrade from coordinated data, full Integrator and Koha processing, duplicate handling, error paths and link repair remain unverified.
+
+## 2026-11-09 — Prepare migration and compatibility rehearsal
+
+### Changed
+- Documented the ordering and stop conditions for an isolated DSpace 10.1 database migration and existing Solr search schema upgrade, and the KDV REST acceptance scenarios.
+
+### Verification
+- Reviewed the startup and Swarm deploy paths and DSpace 10.1 source tests for selected REST operations. KDV DSpace contract tests passed (22 tests); these use mocked responses.
+- The complete procedure, live DSpace 10.1 REST compatibility, and an upgrade from a coordinated backup remain unverified. No deployment was performed.
+
+## 2026-11-09 — Plan DSpace 10.1 dev upgrade
+
+### Changed
+- Added a staged DSpace 10.1 and PostgreSQL 17 DHI implementation plan, including backup, rollback, and KDV Integrator acceptance.
+- Pinned the custom Angular build to the DSpace 10.1 release commit; removed the unused `DSPACE_VERSION` key from the environment contract.
+
+### Verification
+- Confirmed the 10.1 backend, Solr, and Angular tags in Docker Hub's catalog and identified the Angular release commit from GitHub.
+- The existing OIDC patch applies to the 10.1 source; the dev environment contract validates and the three upstream image manifests are available.
+- The custom Angular 10.1 Docker image built locally. npm reported 82 dependency vulnerabilities during the build; their applicability to the final image has not been assessed.
+- The 10.1 search schema differs from 9.x, while the current Solr entrypoint preserves existing core configuration. Existing Solr data and configuration require an isolated upgrade rehearsal before deployment.
+- The operator reported a successful PostgreSQL 15 restore smoke from the 2026-11-09 dev metadata backup (63 tables). An isolated restore of that SQL dump completed DSpace 10.1 `database migrate ignored`; `database info` showed the 10.0 migrations succeeded. A clean Solr 10.1 search core started separately.
+- An isolated online copy of the existing Solr cores started under 10.1; replacing the search schema and reloading preserved counts (search 305, statistics 380, authority 0). A synthetic document was indexed and found using the new `itemauthoritylookup` field. This does not verify a consistent backup or full DSpace reindex.
+- A separate isolated rehearsal restored the SQL dump, migrated the database, and completed `index-discovery -b`. Search document count changed from 305 to 465 and statistics remained 380; the SQL and Solr copies were not a coordinated snapshot and no assetstore was mounted, so search correctness and full-text indexing remain unverified.
+- UI publication, deployment, and live integration acceptance were not performed.
+
 ## 2026-11-03 — Skip deployment for operational scripts
 
 ### Changed
