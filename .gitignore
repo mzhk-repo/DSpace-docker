@@ -10,7 +10,6 @@ nginx/conf.d/dspace.conf
 
 archive/
 docs/AGENTS.md
-docs/hello-world.md
 chat.json
 docs/snippets/dspace-tracker.js
 docs/DOCKER-SECRETS.md
