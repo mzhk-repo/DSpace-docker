@@ -13,6 +13,7 @@
 - 2026-11-09: оператор повідомив про завершення dev-деплою; маркер оновлення — `deploy-complete`. У Swarm backend і Solr 10.1, власний Angular-образ і PostgreSQL 15 мають 1/1 реплік; контейнери healthy. `database info` показав успішні міграції 10.0 та дві старі міграції `Out of Order`. Усі шість Solr-ядер без помилок ініціалізації; `search` — 465, `statistics` — 384, `authority` — 0 документів. UI, REST core/sites та OAI Identify пройшли required smoke з HTTP 200. У стартовому логу Solr є `StatusLogger Reconfiguration failed`, вплив не встановлено. Пошук, PDF, OIDC, SMTP та сценарій KDV/Koha потребують приймання.
 - Push змін UI у `dev` може запустити автоматичний деплой через `.github/workflows/main.yml`. До готовності резервної копії не запускати такий push.
 - Dev і production фізично розділені та розгортаються через наявний CI/CD. Окремі гілки чи середовища для цього оновлення не потрібні.
+- Оператор повідомив, що після dev-деплою адміністративна панель та Integrator працюють, а production backups виконані. Production-режим скрипта підготовлено, але сам production-апгрейд і відновлення в його реальному оточенні не перевірялися. До виконання потрібно змінити лише теги backend і Solr у `env.prod.enc` на `dspace-10.1` і зберегти оновлений контракт для наступних CI-деплоїв.
 
 ## 1. DSpace 10.1 на PostgreSQL 15
 
@@ -37,7 +38,7 @@ bash scripts/test-restore.sh --env dev /path/to/full_local_backup.tar.gz
 
 ### Порядок міграції та оновлення Solr
 
-Штатний Swarm deploy може запустити backend і його звичайний `database migrate` до виконання цих кроків. Для dev підготовлено `scripts/upgrade-dspace-10.1-swarm.sh`: він зупиняє backend, оновлює схему та виконує міграцію й індексацію до звичайного деплою. Повний сценарій цього скрипта на Swarm ще не перевірений; умови та команди наведені в `docs/scripts_runbook.md`. Секрет `app_env_payload` завантажується у Swarm backend і може містити `DSPACE_SKIP_DB_MIGRATIONS`.
+Штатний Swarm deploy може запустити backend і його звичайний `database migrate` до виконання цих кроків. `scripts/upgrade-dspace-10.1-swarm.sh` зупиняє backend, оновлює схему та виконує міграцію й індексацію до деплою для обраного середовища. Для production потрібне окреме явне підтвердження; production-режим ще не перевірений на реальному стеку. Умови та команди наведені в `docs/scripts_runbook.md`. Секрет `app_env_payload` завантажується у Swarm backend і може містити `DSPACE_SKIP_DB_MIGRATIONS`.
 
 1. Зупинити всі джерела запису, перевірити цільове середовище і відновити узгоджені SQL, assetstore, Solr та конфігурацію на окремі томи. Ізолювати мережу і вихідні інтеграції. Перевірити backup і можливість відновлення до початку міграції.
 2. Запустити PostgreSQL 15 з копією бази. Одноразовий контейнер DSpace 10.1 має використовувати ті самі налаштування БД і backend-конфігурацію, що й цільовий backend, але не запускати вебсервер. Перевірити `database info`, виконати `/dspace/bin/dspace database migrate ignored`, перевірити код завершення і повторно `database info`. При помилці зупинитися, зберегти журнал і діагностувати стан; повторний запуск не вважати автоматично безпечним.

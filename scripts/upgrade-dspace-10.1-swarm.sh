@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time DSpace 9 to 10.1 upgrade for the existing dev Swarm stack.
+# One-time DSpace 9 to 10.1 upgrade for an existing Swarm stack.
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
@@ -7,22 +7,42 @@ SCRIPT_DIR="${ROOT_DIR}/scripts"
 STACK_NAME="${STACK_NAME:-dspace}"
 
 usage() {
-  echo 'Usage: bash scripts/upgrade-dspace-10.1-swarm.sh --env dev --maintenance-confirmed [--resume-stopped]'
+  echo 'Usage: bash scripts/upgrade-dspace-10.1-swarm.sh --env dev|prod --maintenance-confirmed [--production-confirmed] [--resume-stopped] [--preflight-only]'
   echo 'Requires a verified coordinated backup and all external writers and deployments stopped.'
 }
 die() { echo "ERROR: $*" >&2; exit 1; }
 if [[ $# == 1 && ( "$1" == --help || "$1" == -h ) ]]; then usage; exit 0; fi
-[[ ( $# == 3 || ( $# == 4 && "$4" == --resume-stopped ) ) && "$1" == --env && "$2" == dev && "$3" == --maintenance-confirmed ]] || { usage >&2; exit 1; }
+[[ $# -ge 3 && "$1" == --env && ( "$2" == dev || "$2" == prod ) && "$3" == --maintenance-confirmed ]] || { usage >&2; exit 1; }
+target_env="$2"
+shift 3
 resume=false
-[[ $# == 4 ]] && resume=true
+production_confirmed=false
+preflight_only=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --resume-stopped) [[ "$resume" == false ]] || die 'Duplicate --resume-stopped'; resume=true ;;
+    --production-confirmed) [[ "$production_confirmed" == false ]] || die 'Duplicate --production-confirmed'; production_confirmed=true ;;
+    --preflight-only) [[ "$preflight_only" == false ]] || die 'Duplicate --preflight-only'; preflight_only=true ;;
+    *) usage >&2; exit 1 ;;
+  esac
+  shift
+done
+if [[ "$target_env" == prod ]]; then
+  [[ "$production_confirmed" == true ]] || die 'Production requires --production-confirmed'
+  deploy_environment=production
+else
+  [[ "$production_confirmed" == false ]] || die '--production-confirmed is only valid with --env prod'
+  deploy_environment=development
+fi
 [[ "$STACK_NAME" =~ ^[a-zA-Z0-9_-]+$ ]] || die 'Invalid STACK_NAME'
 command -v sudo >/dev/null || die 'sudo is required for the Solr schema'
 sudo -n true || die 'Passwordless sudo is required for the Solr schema'
 
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/autonomous-env.sh"
-load_autonomous_env "$ROOT_DIR" dev
-[[ "${DSPACE_REST_VER:-}" == dspace-10.1 && "${DSPACE_SOLR_VER:-}" == dspace-10.1 ]] || die 'dev image versions must both be dspace-10.1'
+load_autonomous_env "$ROOT_DIR" "$target_env"
+[[ "$STACK_NAME" =~ ^[a-zA-Z0-9_-]+$ ]] || die 'Invalid STACK_NAME after loading environment'
+[[ "${DSPACE_REST_VER:-}" == dspace-10.1 && "${DSPACE_SOLR_VER:-}" == dspace-10.1 ]] || die "$target_env image versions must both be dspace-10.1"
 [[ "${POSTGRES_VERSION:-15}" == 15 ]] || die 'This upgrade requires PostgreSQL 15'
 [[ "${SOLR_INTERNAL_PORT:-8983}" == 8983 ]] || die 'This upgrade expects Solr on port 8983'
 backend="${STACK_NAME}_dspace"
@@ -42,6 +62,11 @@ for service in "$backend" "$solr" "$db" "$ui"; do
 done
 [[ "$(docker service inspect "$backend" --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}')" == *':dspace-9_x'* ]] || die 'Backend is not the expected DSpace 9 image'
 [[ "$(docker service inspect "$solr" --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}')" == *':dspace-9_x'* ]] || die 'Solr is not the expected DSpace 9 image'
+[[ "$(docker service inspect "$db" --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}')" =~ (^|/)postgres:15(@|$) ]] || die 'Database is not the expected PostgreSQL 15 image'
+db_cid="$(docker ps -q --filter "label=com.docker.swarm.service.name=$db")"
+[[ "$(docker exec "$db_cid" printenv POSTGRES_DB)" == "${POSTGRES_DB:-dspace}" && "$(docker exec "$db_cid" printenv POSTGRES_USER)" == "${POSTGRES_USER:-dspace}" ]] || die 'Database name or user does not match the selected environment'
+db_mount="$(docker service inspect "$db" --format '{{range .Spec.TaskTemplate.ContainerSpec.Mounts}}{{.Source}}{{"\t"}}{{.Target}}{{"\n"}}{{end}}' | awk -F '\t' -v target="${POSTGRES_PGDATA:-/pgdata}" '$2 == target {print $1}')"
+[[ -n "$db_mount" && "$(realpath -e "$db_mount")" == "$(realpath -e "${VOL_POSTGRESQL_PATH:?}")" ]] || die 'PostgreSQL mount does not match the selected environment'
 
 if [[ "$resume" == true ]]; then
   old_solr_image="$(docker service inspect "$solr" --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}')"
@@ -51,7 +76,7 @@ else
   old_solr_image="$(docker inspect "$solr_cid" --format '{{.Image}}')"
 fi
 solr_dir="$(docker service inspect "$solr" --format '{{range .Spec.TaskTemplate.ContainerSpec.Mounts}}{{if eq .Target "/var/solr/data"}}{{.Source}}{{end}}{{end}}')"
-[[ -n "$solr_dir" && "$(realpath -e "$solr_dir")" == "$(realpath -e "${VOL_SOLR_PATH:?}")" ]] || die 'Solr mount does not match dev environment'
+[[ -n "$solr_dir" && "$(realpath -e "$solr_dir")" == "$(realpath -e "${VOL_SOLR_PATH:?}")" ]] || die 'Solr mount does not match the selected environment'
 schema="${solr_dir}/search/conf/schema.xml"
 [[ -f "$schema" && ! -L "$schema" && ! -L "${solr_dir}/search/conf" ]] || die 'Expected a regular search schema and directory'
 [[ ! -e "${schema}.before-dspace-10.1" ]] || die 'Existing schema backup: inspect previous attempt before proceeding'
@@ -68,6 +93,12 @@ network="$(docker service inspect "$db" --format '{{range .Spec.TaskTemplate.Net
 app_secret="$(docker service inspect "$backend" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{if eq .File.Name "app_env_payload"}}{{.SecretName}}{{end}}{{end}}')"
 password_secret="$(docker service inspect "$backend" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{if eq .File.Name "POSTGRES_PASSWORD"}}{{.SecretName}}{{end}}{{end}}')"
 [[ -n "$app_secret" && -n "$password_secret" ]] || die 'Backend Swarm secrets not found'
+[[ -n "${DSPACE_APP_ENV_PAYLOAD_SECRET_BASE:-}" && -n "${DSPACE_POSTGRES_PASSWORD_SECRET_BASE:-}" ]] || die 'Selected environment must define both secret bases'
+[[ "$app_secret" == "${DSPACE_APP_ENV_PAYLOAD_SECRET_BASE}_"* && "$password_secret" == "${DSPACE_POSTGRES_PASSWORD_SECRET_BASE}_"* ]] || die 'Backend secret names do not match the selected environment'
+config_src="$(docker service inspect "$backend" --format '{{range .Spec.TaskTemplate.ContainerSpec.Mounts}}{{if eq .Target "/dspace/config/local.cfg"}}{{.Source}}{{end}}{{end}}')"
+[[ -f "$config_src" ]] || die 'Backend local.cfg mount is unavailable'
+asset_src="$(docker service inspect "$backend" --format '{{range .Spec.TaskTemplate.ContainerSpec.Mounts}}{{if eq .Target "/dspace/assetstore"}}{{.Source}}{{end}}{{end}}')"
+[[ -d "$asset_src" && "$(realpath -e "$asset_src")" == "$(realpath -e "${VOL_ASSETSTORE_PATH:?}")" ]] || die 'Assetstore mount does not match the selected environment'
 
 work="$(mktemp -d)"
 mutating=false
@@ -101,15 +132,22 @@ PY
 [[ -s "$work/new.xml" ]] || die 'Target schema is empty'
 
 state_dir="${ROOT_DIR}/.orchestrator-state"
-mkdir -p "$state_dir"
 marker="${state_dir}/${STACK_NAME}.upgrade-dspace-10.1"
+if docker service inspect "${STACK_NAME}-upgrade-dspace-101" >/dev/null 2>&1; then
+  die 'Migration job already exists; inspect it before recovery'
+fi
 if [[ "$resume" == true ]]; then
   [[ -f "$marker/status" && "$(cat "$marker/status")" == started ]] || die 'Resume is only allowed before schema replacement and migration'
-  if docker service inspect "${STACK_NAME}-upgrade-dspace-101" >/dev/null 2>&1; then
-    die 'Migration job already exists; inspect it before recovery'
-  fi
 else
-  mkdir "$marker" 2>/dev/null || die "Previous upgrade attempt exists: $marker; inspect before retrying"
+  [[ ! -e "$marker" ]] || die "Previous upgrade attempt exists: $marker; inspect before retrying"
+fi
+if [[ "$preflight_only" == true ]]; then
+  echo "Preflight passed for $target_env. No services or data were changed."
+  exit 0
+fi
+mkdir -p "$state_dir"
+if [[ "$resume" == false ]]; then
+  mkdir "$marker" 2>/dev/null || die "Could not create upgrade marker: $marker"
   printf '%s\n' 'started' > "$marker/status"
 fi
 mutating=true
@@ -151,10 +189,6 @@ done
 
 job="${STACK_NAME}-upgrade-dspace-101"
 docker service inspect "$job" >/dev/null 2>&1 && die "Migration job already exists: $job"
-config_src="$(docker service inspect "$backend" --format '{{range .Spec.TaskTemplate.ContainerSpec.Mounts}}{{if eq .Target "/dspace/config/local.cfg"}}{{.Source}}{{end}}{{end}}')"
-[[ -f "$config_src" ]] || die 'Backend local.cfg mount is unavailable'
-asset_src="$(docker service inspect "$backend" --format '{{range .Spec.TaskTemplate.ContainerSpec.Mounts}}{{if eq .Target "/dspace/assetstore"}}{{.Source}}{{end}}{{end}}')"
-[[ -d "$asset_src" && "$(realpath -e "$asset_src")" == "$(realpath -e "${VOL_ASSETSTORE_PATH:?}")" ]] || die 'Assetstore mount does not match dev environment'
 # The job uses the same secret payload and password handling as the Swarm backend.
 # shellcheck disable=SC2016
 job_command='set -e; while IFS= read -r line || [ -n "$line" ]; do case "$line" in ""|\#*|POSTGRES_PASSWORD=*) continue;; *=*) export "$line";; esac; done < /run/secrets/app_env_payload; export db__P__password="$(cat /run/secrets/POSTGRES_PASSWORD)"; /dspace/bin/dspace database info; /dspace/bin/dspace database migrate ignored; /dspace/bin/dspace database info; /dspace/bin/dspace index-discovery -b'
@@ -182,8 +216,8 @@ docker service logs "$job" || true
 printf '%s\n' 'migration-complete' > "$marker/status"
 docker service rm "$job" >/dev/null
 
-echo 'Migration and discovery indexing completed. Deploying the configured dev stack.'
-ORCHESTRATOR_FORCE_DEPLOY=true ORCHESTRATOR_MODE=swarm ENVIRONMENT_NAME=development \
+echo "Migration and discovery indexing completed. Deploying the configured $target_env stack."
+ORCHESTRATOR_FORCE_DEPLOY=true ORCHESTRATOR_MODE=swarm ENVIRONMENT_NAME="$deploy_environment" \
   STACK_NAME="$STACK_NAME" ORCHESTRATOR_ENV_FILE="$AUTONOMOUS_ENV_TMP" \
   bash "${SCRIPT_DIR}/deploy-orchestrator-swarm.sh"
 printf '%s\n' 'deploy-complete' > "$marker/status"

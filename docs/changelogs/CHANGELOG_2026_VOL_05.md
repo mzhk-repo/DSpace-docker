@@ -1,3 +1,13 @@
+## 2026-11-09 — Prepare DSpace 10.1 production upgrade
+
+### Changed
+- Extended the one-time Swarm upgrade for explicit production selection and confirmation, with a preflight-only mode. Before stopping services, it checks the selected environment against the database identity, PostgreSQL, Solr and assetstore mounts, and versioned secret names.
+- Documented production prerequisites, operator commands, recovery boundaries and the subsequent release workflow. The encrypted production environment was not modified.
+
+### Verification
+- The operator reported successful dev admin and Integrator checks and completed production backups; backup contents and recovery were not independently checked here.
+- Mocked dev and production success, confirmation and environment mismatch paths were checked locally. Production migration, deployment and end-to-end acceptance remain unverified.
+
 ## 2026-11-09 — Restore missing DSpace 10 submission forms
 
 ### Changed
