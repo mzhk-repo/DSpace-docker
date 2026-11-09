@@ -1,3 +1,11 @@
+## 2026-11-09 — Deploy DSpace 10.1 to dev
+
+### Verification
+- The operator reported the upgrade deployment completed; its local marker reads `deploy-complete`. Swarm reports 1/1 for DSpace 10.1 backend and Solr, the patched Angular image and PostgreSQL 15; their running containers report healthy.
+- `database info` showed successful DSpace 10.0 migrations and two older migrations marked Out of Order. All six expected Solr cores reported no initialization failures; search contained 465 documents, statistics 384 and authority 0.
+- Required dev smoke checks returned HTTP 200 for UI, REST core/sites and OAI Identify. Solr startup logged a StatusLogger reconfiguration error; its operational effect has not been established.
+- Search correctness, PDF access, OIDC, mail delivery and end-to-end KDV/Koha acceptance remain to be verified.
+
 ## 2026-11-09 — Wait for stopped Swarm tasks during DSpace upgrade
 
 ### Changed
