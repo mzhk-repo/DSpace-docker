@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       deploy_allowed: ${{ steps.check.outputs.deploy_allowed }}
+      ui_changed: ${{ steps.check.outputs.ui_changed }}
     steps:
       - name: Checkout repository history
         uses: actions/checkout@v4
@@ -45,6 +46,7 @@ jobs:
 
           if [[ "$EVENT_NAME" == "release" ]]; then
             echo "deploy_allowed=true" >> "$GITHUB_OUTPUT"
+            echo "ui_changed=false" >> "$GITHUB_OUTPUT"
             echo "Release event: deployment remains allowed"
             exit 0
           fi
@@ -56,7 +58,11 @@ jobs:
           fi
 
           deploy_allowed=false
+          ui_changed=false
           for path in "${changed_files[@]}"; do
+            case "$path" in
+              ui/Dockerfile|ui/UPSTREAM_REF|ui/oidc-return-page.patch|scripts/ui-image-reference.sh) ui_changed=true ;;
+            esac
             case "$path" in
               # Operational/manual scripts: CI still runs, CD must be skipped.
               scripts/backup-dspace.sh|\
@@ -75,7 +81,6 @@ jobs:
                 ;;
               *)
                 deploy_allowed=true
-                break
                 ;;
             esac
           done
@@ -83,9 +88,12 @@ jobs:
           echo "Changed files:"
           printf ' - %s\n' "${changed_files[@]}"
           echo "deploy_allowed=$deploy_allowed" >> "$GITHUB_OUTPUT"
+          echo "ui_changed=$ui_changed" >> "$GITHUB_OUTPUT"
           echo "Deployment allowed: $deploy_allowed"
 
   build-ui:
+    needs: deploy-change-check
+    if: needs.deploy-change-check.outputs.ui_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -132,8 +140,10 @@ jobs:
   deploy-dev:
     needs: [deploy-change-check, build-ui]
     if: |
-      (github.event_name == 'pull_request' && github.base_ref == 'dev') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/dev')
+      always() && !cancelled() && needs.deploy-change-check.result == 'success' &&
+      (needs.build-ui.result == 'success' || needs.build-ui.result == 'skipped') &&
+      ((github.event_name == 'pull_request' && github.base_ref == 'dev') ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/dev'))
     uses: mzhk-repo/shared-workflows/.github/workflows/shared-ci-cd.yml@main
     with:
       environment_name: development
@@ -157,9 +167,11 @@ jobs:
   deploy-prod:
     needs: [deploy-change-check, build-ui]
     if: |
-      (github.event_name == 'pull_request' && github.base_ref == 'main') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v'))
+      always() && !cancelled() && needs.deploy-change-check.result == 'success' &&
+      (needs.build-ui.result == 'success' || needs.build-ui.result == 'skipped') &&
+      ((github.event_name == 'pull_request' && github.base_ref == 'main') ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+       (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')))
     uses: mzhk-repo/shared-workflows/.github/workflows/shared-ci-cd.yml@main
     with:
       environment_name: production
