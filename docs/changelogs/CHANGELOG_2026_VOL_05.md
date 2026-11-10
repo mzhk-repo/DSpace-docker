@@ -5,7 +5,7 @@
 
 ### Verification
 - Inspected the pinned DSpace 10.1 source: the download guard uses `location.replace`, which replaces the item in browser history. The server obtains an XSRF token for a short-lived token POST, but the request effect filters it because the server XSRF initialization flag remains false. The operator observed an authenticated download pending until a Cloudflare 524 response; this code path is a plausible cause, not yet confirmed at runtime.
-- The UI image build, CI, browser acceptance and authenticated new-tab failure remain unverified. No deployment was performed.
+- The operator built the UI image successfully; local image inspection confirmed the resulting image ID matches the build output and current image reference. CI, browser acceptance and the authenticated new-tab fix remain unverified. No deployment was performed.
 
 ## 2026-11-10 — Investigate bitstream navigation
 
