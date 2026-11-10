@@ -103,6 +103,18 @@ bash scripts/upgrade-dspace-10.1-swarm.sh --env dev --maintenance-confirmed --re
 
    The UI image must be published for the exact checked-out revision. If the production repository lives elsewhere, `cd` to its actual path. If any preflight check fails, stop and inspect the stated mismatch; do not bypass it.
 
+   A `TLS handshake timeout` during manifest inspection is a registry connectivity failure and does not establish that the image is missing. Check DNS and HTTPS from the production manager:
+
+   ```bash
+   getent ahosts ghcr.io | head -4
+   curl -sS -o /dev/null --connect-timeout 10 --max-time 20 -w 'HTTP %{http_code}\n' https://ghcr.io/v2/
+   curl -sS -o /dev/null --connect-timeout 10 --max-time 20 -w 'Token endpoint HTTP %{http_code}\n' 'https://ghcr.io/token?service=ghcr.io&scope=repository:mzhk-repo/dspace-angular:pull'
+   ```
+
+   HTTP 401 from `/v2/` confirms an HTTPS response from the registry; it does not prove that the image manifest or its blobs can be fetched. A successful `docker pull` verifies that the local daemon fetched the image for its platform, but does not establish reliable registry connectivity for later operations. The orchestrator checks the registry again after migration, so resolve intermittent connectivity before starting the upgrade.
+
+   A tag can be republished. Compare the UI digest on the accepted dev service (`docker service inspect dspace_dspace-angular --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}'`) with the digest obtained on production when pulling the image. If they differ, test the production digest on dev and agree which image to deploy before migrating production.
+
 4. Run the preflight first. It creates and removes temporary containers to inspect image files, but does not change services, the database, Solr data or the upgrade marker. It cannot verify the backup contents or the deployment freeze:
 
    ```bash
@@ -123,7 +135,7 @@ bash scripts/upgrade-dspace-10.1-swarm.sh --env dev --maintenance-confirmed --re
    docker service ls --filter name=dspace_
    ```
 
-   Also check migration status, search and PDF access, OAI, statistics, OIDC and a controlled Integrator workflow. A `1/1` replica count alone is not acceptance. After successful checks, publish the reviewed release revision through the normal process if a release is required; publishing it runs the production workflow again. Ensure that the release contains the updated encrypted contract.
+   Also check migration status, search and PDF access, OAI, statistics, OIDC and a controlled Integrator workflow. A `1/1` replica count alone is not acceptance. After successful checks, publish the reviewed release revision through the normal process if a release is required; publishing it runs the production workflow again. Ensure that the release contains the updated encrypted contract. The release workflow does not build the Angular image: the image reference computed by `scripts/ui-image-reference.sh` must already be published and accepted on dev.
 
 ### `scripts/deploy-orchestrator-swarm.sh`
 

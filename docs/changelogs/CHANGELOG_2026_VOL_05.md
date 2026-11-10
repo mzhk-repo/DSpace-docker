@@ -1,3 +1,26 @@
+## 2026-11-10 — Limit Angular image builds to relevant changes
+
+### Changed
+- Build the Angular image only when its Dockerfile, upstream reference, patch, or image reference script changes. Other CI and deployment jobs can proceed when the build is skipped; a failed build still blocks them. Releases use the previously published image.
+
+### Verification
+- GitHub Actions execution and release deployment remain unverified.
+
+## 2026-11-10 — Investigate GHCR timeouts and UI digests
+
+### Verification
+- The operator reported a successful production pull after repeated manifest inspection TLS timeouts. Buildx inspected the tag on dev, but another dev inspection timed out requesting a GHCR token; changing inspection commands alone does not establish reliable connectivity.
+- The running dev UI and production pull have different digests for the same tag and different image layers. The production image has not been accepted on dev. No production deployment was performed in this investigation.
+
+## 2026-11-09 — Clarify GHCR connectivity failures
+
+### Changed
+- Clarified registry inspection errors in the upgrade script and added targeted production DNS and HTTPS diagnostics to the runbook.
+
+### Verification
+- The operator reported a TLS handshake timeout against GHCR during production preflight. GitHub's package page lists the expected UI image tag. Production network and registry access remain to be diagnosed.
+- Mocked preflight failure preserved the underlying TLS diagnostic and stopped before service changes; ShellCheck and shell syntax passed.
+
 ## 2026-11-09 — Prepare DSpace 10.1 production upgrade
 
 ### Changed
