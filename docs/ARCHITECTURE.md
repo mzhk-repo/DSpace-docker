@@ -1,10 +1,10 @@
 # DSpace-docker: Архітектура Репозиторію
 
-Дата оновлення: 2026-03-23
+Дата оновлення: 2026-11-10
 
 ## 1) Призначення репозиторію
 
-`DSpace-docker` це operational/deploy репозиторій для core DSpace 9 runtime (UI + REST + Solr + PostgreSQL).
+`DSpace-docker` це operational/deploy репозиторій для DSpace 10.1 runtime (UI + REST + Solr + PostgreSQL). Dev перейшов на 10.1; production upgrade і приймання ще не підтверджені.
 Ingress-шар (`Traefik`, `Cloudflare Tunnel`) винесений в окремі репозиторії.
 
 Основні задачі:
@@ -16,11 +16,13 @@ Ingress-шар (`Traefik`, `Cloudflare Tunnel`) винесений в окрем
 
 ## 2) Runtime-стек (фактичний)
 
-Сервіси у `docker-compose.yml`:
+Сервіси у `docker-compose.yml`; версії образів задаються контрактом середовища і мають відповідати цільовому середовищу:
 1. `dspacedb` (`postgres:15`) — primary DB.
-2. `dspacesolr` (`dspace/dspace-solr:dspace-9_x`) — Solr cores для discovery/OAI/statistics.
-3. `dspace` (`dspace/dspace:dspace-9_x`) — backend (REST API, міграції БД на старті).
-4. `dspace-angular` (`dspace/dspace-angular:dspace-9_x-dist`) — frontend UI.
+2. `dspacesolr` (`dspace/dspace-solr:dspace-10.1`) — Solr cores для discovery/OAI/statistics.
+3. `dspace` (`dspace/dspace:dspace-10.1`) — backend (REST API; звичайний startup може виконати міграції БД).
+4. `dspace-angular` — власний Angular-образ, побудований з DSpace 10.1 та OIDC-патчем; посилання визначає `scripts/ui-image-reference.sh`.
+
+Поточний підтверджений стан: оператор повідомив, що dev працює на backend і Solr 10.1, власному UI-образі та PostgreSQL 15. У production ще потрібні міграція, розгортання та runtime-приймання. Перед production змінами потрібні узгоджені резервні копії й проходження процедури `docs/DSpace-10.1-PostgreSQL-17-implementation-plan.md` та `docs/scripts_runbook.md`.
 
 Ingress-компоненти:
 - `Traefik` — окремий репозиторій `/home/pinokew/Traefik`.
@@ -98,7 +100,7 @@ Ingress-компоненти:
 
 ## 7) CI/CD архітектура
 
-Workflow: `.github/workflows/ci-cd.yml`
+Workflow: `.github/workflows/main.yml`
 
 `ci-checks`:
 1. Shellcheck для `scripts/**/*.sh`.

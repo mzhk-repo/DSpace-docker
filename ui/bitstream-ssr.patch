@@ -1,0 +1,52 @@
+diff --git a/src/app/core/data/request.effects.ts b/src/app/core/data/request.effects.ts
+index 13eddd5..6a6e695 100644
+--- a/src/app/core/data/request.effects.ts
++++ b/src/app/core/data/request.effects.ts
+@@ -1,6 +1,9 @@
++import { isPlatformServer } from '@angular/common';
+ import {
++  Inject,
+   Injectable,
+   Injector,
++  PLATFORM_ID,
+ } from '@angular/core';
+ import { RestRequestMethod } from '@dspace/config/rest-request-method';
+ import {
+@@ -27,6 +30,10 @@ import { DSpaceSerializer } from '../dspace-rest/dspace.serializer';
+ import { DspaceRestService } from '../dspace-rest/dspace-rest.service';
+ import { RawRestResponse } from '../dspace-rest/raw-rest-response.model';
+ import { StoreActionTypes } from '../ngrx/type';
++import {
++  DSPACE_XSRF_COOKIE,
++  XSRF_REQUEST_HEADER,
++} from '../xsrf/xsrf.constants';
+ import { XSRFService } from '../xsrf/xsrf.service';
+ import {
+   RequestActionTypes,
+@@ -52,9 +59,15 @@ export class RequestEffects {
+     }),
+     filter((entry: RequestEntry) => hasValue(entry)),
+     withLatestFrom(this.xsrfService.tokenInitialized$),
+-    // If it's a GET request, or we have an XSRF token, dispatch it immediately
+-    // Otherwise wait for the XSRF token first
+-    filter(([entry, tokenInitialized]: [RequestEntry, boolean]) => entry.request.method === RestRequestMethod.GET || tokenInitialized === true),
++    // SSR short-lived token requests carry their own backend-issued XSRF header and cookie.
++    filter(([entry, tokenInitialized]: [RequestEntry, boolean]) => {
++      const request = entry.request;
++      const token = request.options?.headers?.get(XSRF_REQUEST_HEADER);
++      return request.method === RestRequestMethod.GET || tokenInitialized === true ||
++        (isPlatformServer(this.platformId) && request.method === RestRequestMethod.POST &&
++          request.href.endsWith('/api/authn/shortlivedtokens') && isNotEmpty(token) &&
++          request.options?.headers?.get('Cookie') === `${DSPACE_XSRF_COOKIE}=${token}`);
++    }),
+     map(([entry, tokenInitialized]: [RequestEntry, boolean]) => entry.request),
+     mergeMap((request: RestRequestWithResponseParser) => {
+       let body = request.body;
+@@ -97,6 +110,7 @@ export class RequestEffects {
+     private injector: Injector,
+     protected requestService: RequestService,
+     protected xsrfService: XSRFService,
++    @Inject(PLATFORM_ID) private platformId: object,
+   ) { }
+ 
+ }

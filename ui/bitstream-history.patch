@@ -1,0 +1,76 @@
+diff --git a/src/app/bitstream-page/bitstream-download-redirect.guard.spec.ts b/src/app/bitstream-page/bitstream-download-redirect.guard.spec.ts
+index 7fcfba7..12e8a9f 100644
+--- a/src/app/bitstream-page/bitstream-download-redirect.guard.spec.ts
++++ b/src/app/bitstream-page/bitstream-download-redirect.guard.spec.ts
+@@ -169,7 +169,7 @@ describe('BitstreamDownloadRedirectGuard', () => {
+       it('should redirect to the content link', waitForAsync(() => {
+         TestBed.runInInjectionContext(() => {
+           resolver(route, state).subscribe(() => {
+-            expect(hardRedirectService.redirect).toHaveBeenCalledWith('bitstream-content-link', null, true);
++            expect(hardRedirectService.redirect).toHaveBeenCalledWith('bitstream-content-link', null, true, true);
+           },
+           );
+         });
+@@ -183,7 +183,7 @@ describe('BitstreamDownloadRedirectGuard', () => {
+       it('should redirect to an updated content link', waitForAsync(() => {
+         TestBed.runInInjectionContext(() => {
+           resolver(route, state).subscribe(() => {
+-            expect(hardRedirectService.redirect).toHaveBeenCalledWith('content-url-with-headers', null, true);
++            expect(hardRedirectService.redirect).toHaveBeenCalledWith('content-url-with-headers', null, true, true);
+           });
+         });
+       }));
+diff --git a/src/app/bitstream-page/bitstream-download-redirect.guard.ts b/src/app/bitstream-page/bitstream-download-redirect.guard.ts
+index 50d58d6..71c2522 100644
+--- a/src/app/bitstream-page/bitstream-download-redirect.guard.ts
++++ b/src/app/bitstream-page/bitstream-download-redirect.guard.ts
+@@ -104,14 +104,14 @@ export const bitstreamDownloadRedirectGuard: CanActivateFn = (
+     }),
+     map(([isAuthorized, isLoggedIn, bitstream, fileLink]: [boolean, boolean, Bitstream, string]) => {
+       if (isAuthorized && isLoggedIn && isNotEmpty(fileLink)) {
+-        hardRedirectService.redirect(fileLink, null, true);
++        hardRedirectService.redirect(fileLink, null, true, true);
+         return false;
+       } else if (isAuthorized && !isLoggedIn && !hasValue(accessToken)) {
+-        hardRedirectService.redirect(bitstream._links.content.href, null, true);
++        hardRedirectService.redirect(bitstream._links.content.href, null, true, true);
+         return false;
+       } else if (!isAuthorized) {
+         if (hasValue(accessToken)) {
+-          hardRedirectService.redirect(bitstream._links.content.href + '?accessToken=' + accessToken, null, true);
++          hardRedirectService.redirect(bitstream._links.content.href + '?accessToken=' + accessToken, null, true, true);
+           return false;
+         } else if (isLoggedIn) {
+           return router.createUrlTree([getForbiddenRoute()]);
+diff --git a/src/app/core/services/browser-hard-redirect.service.ts b/src/app/core/services/browser-hard-redirect.service.ts
+index a85b0cf..3a1226b 100644
+--- a/src/app/core/services/browser-hard-redirect.service.ts
++++ b/src/app/core/services/browser-hard-redirect.service.ts
+@@ -29,8 +29,12 @@ export class BrowserHardRedirectService extends HardRedirectService {
+    * Perform a hard redirect to URL
+    * @param url
+    */
+-  redirect(url: string) {
+-    this.location.replace(url);
++  redirect(url: string, statusCode?: number, shouldSetCorsHeader?: boolean, preserveHistory = false) {
++    if (preserveHistory) {
++      this.location.assign(url);
++    } else {
++      this.location.replace(url);
++    }
+   }
+ 
+   /**
+diff --git a/src/app/core/services/hard-redirect.service.ts b/src/app/core/services/hard-redirect.service.ts
+index 06429e1..c6fb069 100644
+--- a/src/app/core/services/hard-redirect.service.ts
++++ b/src/app/core/services/hard-redirect.service.ts
+@@ -16,7 +16,7 @@ export abstract class HardRedirectService {
+    * @param shouldSetCorsHeader
+    *    optional to prevent CORS error on redirect
+    */
+-  abstract redirect(url: string, statusCode?: number, shouldSetCorsHeader?: boolean);
++  abstract redirect(url: string, statusCode?: number, shouldSetCorsHeader?: boolean, preserveHistory?: boolean);
+ 
+   /**
+    * Get the current route, with query params included
