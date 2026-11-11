@@ -12,6 +12,10 @@ RUN git init && git remote add origin https://github.com/DSpace/dspace-angular.g
 
 COPY oidc-return-page.patch /tmp/oidc-return-page.patch
 RUN git apply --check /tmp/oidc-return-page.patch && git apply /tmp/oidc-return-page.patch
+COPY bitstream-history.patch /tmp/bitstream-history.patch
+RUN git apply --check /tmp/bitstream-history.patch && git apply /tmp/bitstream-history.patch
+COPY bitstream-ssr.patch /tmp/bitstream-ssr.patch
+RUN git apply --check /tmp/bitstream-ssr.patch && git apply /tmp/bitstream-ssr.patch
 RUN npm ci
 ENV NODE_OPTIONS="--max_old_space_size=4096"
 RUN npm run build:prod

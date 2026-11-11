@@ -1,3 +1,26 @@
+## 2026-11-10 — Fix bitstream redirects and server-side token requests
+
+### Changed
+- Added versioned Angular patches that preserve browser history for bitstream redirects and allow the server-side short-lived token request when its XSRF header matches its backend cookie. Included both patches in the image reference and UI build trigger.
+
+### Verification
+- Inspected the pinned DSpace 10.1 source: the download guard uses `location.replace`, which replaces the item in browser history. The server obtains an XSRF token for a short-lived token POST, but the request effect filters it because the server XSRF initialization flag remains false. The operator observed an authenticated download pending until a Cloudflare 524 response; this code path is a plausible cause, not yet confirmed at runtime.
+- The operator built the UI image successfully; local image inspection confirmed the resulting image ID matches the build output and current image reference. CI, browser acceptance and the authenticated new-tab fix remain unverified. No deployment was performed.
+
+## 2026-11-10 — Investigate bitstream navigation
+
+### Verification
+- On dev, an anonymous browser opened a PDF from an item and returned to `/home` with Back. Direct navigation from the item to the same download URL returned to the item with Back; the anonymous download URL returned HTTP 302 to the content endpoint.
+- The operator reported that authenticated new-tab downloads fail in both environments. The authenticated dev path and root cause remain unverified; no fix or deployment was performed.
+
+## 2026-11-10 — Align architecture documentation with DSpace 10.1
+
+### Changed
+- Updated the runtime architecture to describe DSpace 10.1, PostgreSQL 15, the versioned Angular image, and the confirmed dev state. Clarified that production upgrade and acceptance remain pending.
+
+### Verification
+- Compared the documentation with `docker-compose.yml`, the implementation plan, and the reported dev status in the preceding changelog entries. No deployment or runtime checks were performed.
+
 ## 2026-11-10 — Limit Angular image builds to relevant changes
 
 ### Changed
