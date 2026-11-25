@@ -1,3 +1,11 @@
+## 2026-11-25 — Remove obsolete timezone bind mount
+
+### Changed
+- Removed the `/etc/timezone` bind mount from all four services. The existing `/etc/localtime` mount remains available for the host timezone.
+
+### Verification
+- Swarm rejected all four DSpace services on the Ubuntu 26.04 host because `/etc/timezone` was absent. Deployment and runtime verification of this change remain pending.
+
 ## 2026-11-10 — Fix bitstream redirects and server-side token requests
 
 ### Changed
