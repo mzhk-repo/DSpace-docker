@@ -17,7 +17,6 @@ services:
     volumes:
       - ${VOL_POSTGRESQL_PATH:-./data/pgdata}:${POSTGRES_PGDATA:-/pgdata}
       - /etc/localtime:/etc/localtime:ro
-      - /etc/timezone:/etc/timezone:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dspace} -d ${POSTGRES_DB:-dspace} -h 127.0.0.1 -p ${POSTGRES_INTERNAL_PORT:-5432}"]
       interval: 10s
@@ -46,7 +45,6 @@ services:
     volumes:
       - ${VOL_SOLR_PATH:-./data/solr}:/var/solr/data
       - /etc/localtime:/etc/localtime:ro
-      - /etc/timezone:/etc/timezone:ro
     user: root
     entrypoint:
       - /bin/bash
@@ -134,7 +132,6 @@ services:
       - ./dspace/config/local.cfg:/dspace/config/local.cfg
       - ./dspace/config/submission-forms.xml:/dspace/config/submission-forms.xml
       - /etc/localtime:/etc/localtime:ro
-      - /etc/timezone:/etc/timezone:ro
     entrypoint:
       - /opt/dspace/scripts/entrypoint.sh
     command:
@@ -174,7 +171,6 @@ services:
     volumes:
       - ./ui-config/config.yml:/app/config/config.yml:ro
       - /etc/localtime:/etc/localtime:ro
-      - /etc/timezone:/etc/timezone:ro
     environment:
       # Внутрішнє звернення контейнера Angular до API (залишаємо http і ім'я сервісу, бо це внутрішня мережа Docker)
       DSPACE_REST_SSRBASEURL: http://dspace:8080/server
